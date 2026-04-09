@@ -196,7 +196,8 @@ export default function Overview() {
                                     <div className={`w-2 h-2 rounded-full mt-2 ${activity.type === 'entry' ? 'bg-accent' :
                                         activity.type === 'visitor' ? 'bg-orange-500' :
                                             activity.type === 'payment' ? 'bg-success' :
-                                                'bg-primary'
+                                                activity.type === 'sos' ? 'bg-destructive' :
+                                                    'bg-primary'
                                         }`} />
                                     <div className="flex-1 min-w-0">
                                         <p className="font-medium text-foreground">

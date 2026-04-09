@@ -31,7 +31,7 @@ export function EstateProvider({ children }: { children: ReactNode }) {
   const [estate, setEstate] = useState<EstateConfig>(() => {
     if (typeof window !== 'undefined') {
       const storedAppId = localStorage.getItem('app_id');
-      if (storedAppId && storedAppId !== 'estate_001') {
+      if (storedAppId) {
         return { ...defaultEstate, appId: storedAppId };
       }
     }
@@ -43,7 +43,7 @@ export function EstateProvider({ children }: { children: ReactNode }) {
     async function initEstate() {
       const storedAppId = typeof window !== 'undefined' ? localStorage.getItem('app_id') : null;
 
-      if (!storedAppId || storedAppId === 'estate_001') {
+      if (!storedAppId) {
         setIsLoading(false);
         return;
       }

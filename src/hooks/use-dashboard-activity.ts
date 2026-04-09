@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 export interface DashboardActivity {
-    type: 'entry' | 'visitor' | 'registration' | 'payment';
+    type: 'entry' | 'visitor' | 'registration' | 'payment' | 'sos';
     action: string;
     details: string;
     timestamp: string;
