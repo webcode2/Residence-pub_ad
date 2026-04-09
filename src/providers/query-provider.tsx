@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode, useState } from "react";
 import { EstateProvider } from "@/contexts/EstateContext";
+import { UserProvider } from "@/contexts/UserContext";
 
 export function Providers({ children }: { children: ReactNode }) {
     const [queryClient] = useState(() => new QueryClient({
@@ -15,9 +16,11 @@ export function Providers({ children }: { children: ReactNode }) {
 
     return (
         <QueryClientProvider client={queryClient}>
-            <EstateProvider>
-                {children}
-            </EstateProvider>
+            <UserProvider>
+                <EstateProvider>
+                    {children}
+                </EstateProvider>
+            </UserProvider>
         </QueryClientProvider>
     );
 }

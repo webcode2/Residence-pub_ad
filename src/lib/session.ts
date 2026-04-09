@@ -20,11 +20,10 @@ export async function decrypt(input: string): Promise<any> {
     return payload;
 }
 
-export async function login(user: any) {
-
+export async function login(user: any, token?: string) {
     // Create the session
     const expires = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours from now
-    const session = await encrypt({ user, expires });
+    const session = await encrypt({ user, token, expires });
 
     // Save the session in a cookie
     (await cookies()).set("session", session, {

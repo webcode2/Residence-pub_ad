@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +14,7 @@ import {
     Settings,
     Menu,
     X,
+    User,
     LogOut,
     Bell,
     ChevronRight
@@ -21,24 +22,50 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useEstate } from '@/contexts/EstateContext';
+import { useUser } from '@/contexts/UserContext';
 import { Brand } from '@/components/shared/Brand';
 import { TwoFactorWarning } from '@/components/dashboard/TwoFactorWarning';
 import { logoutAction } from '@/actions/auth';
 
 const navItems = [
-    { path: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-    { path: '/dashboard/residents', label: 'Directory', icon: Users },
-    { path: '/dashboard/logs', label: 'Access Logs', icon: FileText },
-    { path: '/dashboard/billing', label: 'Billing Hub', icon: CreditCard },
-    { path: '/dashboard/reports', label: 'Reports', icon: AlertTriangle },
-    { path: '/dashboard/settings', label: 'Settings', icon: Settings },
+    { path: '/dashboard', label: 'Overview', icon: LayoutDashboard, roles: ['caretaker', 'landlord', 'resident'] },
+    { path: '/dashboard/residents', label: 'Directory', icon: Users, roles: ['caretaker', 'landlord'] },
+    { path: '/dashboard/logs', label: 'Access Logs', icon: FileText, roles: ['caretaker', 'landlord', 'resident'] },
+    { path: '/dashboard/billing', label: 'Billing Hub', icon: CreditCard, roles: ['caretaker', 'landlord', 'resident'] },
+    { path: '/dashboard/profile', label: 'Profile', icon: User, roles: ['caretaker', 'landlord', 'resident'] },
+    { path: '/dashboard/reports', label: 'Reports', icon: AlertTriangle, roles: ['caretaker'] },
+    { path: '/dashboard/notifications', label: 'Notifications', icon: Bell, roles: ['caretaker'] },
+    { path: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['caretaker'] },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [mounted, setMounted] = useState(false);
     const pathname = usePathname();
     const { estate } = useEstate();
+    const { user, isLoading: userLoading } = useUser();
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    const filteredNavItems = useMemo(() => {
+        if (!user) return [];
+        return navItems.filter(item =>
+            item.roles.some(role =>
+                user.roles?.some(uRole => uRole.toLowerCase() === role.toLowerCase() || uRole.toLowerCase() === 'saas_owner')
+            )
+        );
+    }, [user]);
+
+    // Provide a default list for SSR to avoid empty nav mismatch
+    const displayNavItems = mounted && !userLoading ? filteredNavItems : [];
+
+    const getInitials = (name: string) => {
+        if (!name) return '??';
+        return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+    };
 
     const NavLink = ({ item }: { item: typeof navItems[0] }) => {
         const isActive = pathname === item.path;
@@ -108,9 +135,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 {/* Nav */}
                 <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-                    {navItems.map((item) => (
-                        <NavLink key={item.path} item={item} />
-                    ))}
+                    {userLoading || !mounted ? (
+                        // Skeleton loading states
+                        [1, 2, 3, 4, 5].map((i) => (
+                            <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-lg animate-pulse bg-sidebar-accent/50 mb-1">
+                                <div className="h-5 w-5 rounded bg-sidebar-foreground/20" />
+                                {sidebarOpen && <div className="h-4 w-24 rounded bg-sidebar-foreground/20" />}
+                            </div>
+                        ))
+                    ) : (
+                        displayNavItems.map((item: any) => (
+                            <NavLink key={item.path} item={item} />
+                        ))
+                    )}
                 </nav>
 
                 {/* Footer */}
@@ -155,22 +192,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 </Button>
                             </div>
                             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-                                {navItems.map((item) => (
-                                    <Link
-                                        key={item.path}
-                                        href={item.path}
-                                        onClick={() => setMobileOpen(false)}
-                                        className={cn(
-                                            "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                                            pathname === item.path
-                                                ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                                                : "text-sidebar-foreground hover:bg-sidebar-accent"
-                                        )}
-                                    >
-                                        <item.icon className="h-5 w-5" />
-                                        <span className="font-medium">{item.label}</span>
-                                    </Link>
-                                ))}
+                                {userLoading ? (
+                                    [1, 2, 3, 4, 5].map((i) => (
+                                        <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-lg animate-pulse bg-sidebar-accent/50 mb-1">
+                                            <div className="h-5 w-5 rounded bg-sidebar-foreground/20" />
+                                            <div className="h-4 w-24 rounded bg-sidebar-foreground/20" />
+                                        </div>
+                                    ))
+                                ) : (
+                                    displayNavItems.map((item: any) => (
+                                        <Link
+                                            key={item.path}
+                                            href={item.path}
+                                            onClick={() => setMobileOpen(false)}
+                                            className={cn(
+                                                "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                                                pathname === item.path
+                                                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                                                    : "text-sidebar-foreground hover:bg-sidebar-accent"
+                                            )}
+                                        >
+                                            <item.icon className="h-5 w-5" />
+                                            <span className="font-medium">{item.label}</span>
+                                        </Link>
+                                    ))
+                                )}
                             </nav>
                         </motion.aside>
                     </>
@@ -204,9 +250,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <Bell className="h-5 w-5" />
                             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent rounded-full" />
                         </Button>
-                        <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center">
-                            <span className="text-sm font-semibold text-primary-foreground">AD</span>
-                        </div>
+                        {mounted && (
+                            <div className="flex items-center gap-3 pl-3 border-l border-border">
+                                <div className="hidden md:block text-right">
+                                    <p className="text-sm font-semibold text-foreground leading-none">{user?.full_name}</p>
+                                    <p className="text-xs text-muted-foreground mt-1 capitalize">
+                                        {user?.roles?.[0] || 'User'}
+                                    </p>
+                                </div>
+                                <div className="w-9 h-9 rounded-xl bg-accent/20 flex items-center justify-center border border-accent/30 shadow-sm">
+                                    <span className="text-sm font-bold text-accent">
+                                        {user ? getInitials(user.full_name) : '??'}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </header>
 

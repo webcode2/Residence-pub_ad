@@ -1,20 +1,15 @@
 "use client";
 
 import { useState } from 'react';
-import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, DollarSign, AlertCircle, Check } from 'lucide-react';
+import { X, Banknote, Loader2, Plus, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useFeeConfigs, useCreateFeeConfig, useDeleteFeeConfig, useUpdateFeeConfig } from '@/hooks/use-billings';
 import { useEstate } from '@/contexts/EstateContext';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-
-const FeeSchema = z.object({
-  fee: z.number().min(0, 'Fee must be positive').max(10000000, 'Fee too high'),
-  confirmFee: z.number(),
-}).refine((data) => data.fee === data.confirmFee, {
-  message: "Fees must match",
-  path: ["confirmFee"],
-});
 
 interface SetGlobalFeeModalProps {
   open: boolean;
@@ -22,166 +17,271 @@ interface SetGlobalFeeModalProps {
 }
 
 export function SetGlobalFeeModal({ open, onClose }: SetGlobalFeeModalProps) {
-  const { estate, setGlobalFee } = useEstate();
-  const [fee, setFee] = useState('');
-  const [confirmFee, setConfirmFee] = useState('');
-  const [errors, setErrors] = useState<{ fee?: string; confirmFee?: string }>({});
-  const [success, setSuccess] = useState(false);
+  const { estate } = useEstate();
+  const { data: feeConfigs = [], isLoading } = useFeeConfigs(estate.appId);
+  const createFeeMutation = useCreateFeeConfig();
+  const deleteFeeMutation = useDeleteFeeConfig();
+  const updateFeeMutation = useUpdateFeeConfig();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    amount: '',
+    description: ''
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrors({});
+    if (!formData.name || !formData.amount) return;
 
-    const feeNum = parseFloat(fee) || 0;
-    const confirmNum = parseFloat(confirmFee) || 0;
-
-    const result = FeeSchema.safeParse({ fee: feeNum, confirmFee: confirmNum });
-
-    if (!result.success) {
-      const fieldErrors: { fee?: string; confirmFee?: string } = {};
-      result.error.issues.forEach((issue) => {
-        if (issue.path[0] === 'fee') fieldErrors.fee = issue.message;
-        if (issue.path[0] === 'confirmFee') fieldErrors.confirmFee = issue.message;
-      });
-      setErrors(fieldErrors);
-      return;
+    try {
+      console.log("[SetGlobalFeeModal] Submitting form data:", { editingFeeId, ...formData });
+      if (editingFeeId) {
+        await updateFeeMutation.mutateAsync({
+          id: editingFeeId,
+          appId: estate.appId,
+          data: {
+            name: formData.name,
+            amount: parseFloat(formData.amount),
+            description: formData.description
+          }
+        });
+        toast.success("Fee configuration updated");
+        setEditingFeeId(null);
+      } else {
+        const payload = {
+          name: formData.name,
+          amount: parseFloat(formData.amount),
+          description: formData.description,
+          app_id: estate.appId,
+          is_global: true,
+          is_recurring: true,
+          frequency: 'monthly'
+        };
+        console.log("[SetGlobalFeeModal] Creating fee with payload:", payload);
+        await createFeeMutation.mutateAsync(payload);
+        toast.success("Fee configuration added");
+      }
+      setFormData({ name: '', amount: '', description: '' });
+    } catch (error: any) {
+      console.error("[SetGlobalFeeModal] Action failed:", error);
+      if (error.response) {
+        console.error("[SetGlobalFeeModal] Error response:", error.response.data);
+      } else if (error.request) {
+        console.error("[SetGlobalFeeModal] No response received:", error.request);
+      } else {
+        console.error("[SetGlobalFeeModal] Request setup error:", error.message);
+      }
+      toast.error(error.response?.data?.detail || "Action failed. Check console for details.");
     }
-
-    setGlobalFee(feeNum);
-    setSuccess(true);
-    setTimeout(() => {
-      setSuccess(false);
-      setFee('');
-      setConfirmFee('');
-      onClose();
-    }, 1500);
   };
 
-  const formatCurrency = (value: string) => {
-    const num = parseFloat(value.replace(/,/g, '')) || 0;
-    return new Intl.NumberFormat('en-NG').format(num);
+  const startEdit = (fee: any) => {
+    setEditingFeeId(fee.id);
+    setFormData({
+      name: fee.name,
+      amount: fee.amount.toString(),
+      description: fee.description || ''
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingFeeId(null);
+    setFormData({ name: '', amount: '', description: '' });
+  };
+
+  const handleDeleteFee = async (id: string) => {
+    try {
+      await deleteFeeMutation.mutateAsync({ id, appId: estate.appId });
+      toast.success("Fee configuration removed");
+    } catch (error) {
+      toast.error("Failed to remove fee");
+    }
   };
 
   return (
     <AnimatePresence>
       {open && (
-        <>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md z-50"
+            className="relative w-full max-w-md bg-card rounded-2xl shadow-2xl border border-border flex flex-col max-h-[90vh] z-10"
           >
-            <div className="bg-card rounded-2xl shadow-xl border border-border overflow-hidden">
-              {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-border">
-                <div>
-                  <h2 className="text-xl font-display font-bold text-foreground">
-                    Set Global Fee
-                  </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    This will apply to all units in {estate.estateName}
-                  </p>
+            <div className="p-6 border-b border-border">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
+                    <Banknote className="h-5 w-5 text-success" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-display font-bold text-foreground">
+                      Estate Fee Management
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Configure monthly charges for all landlords
+                    </p>
+                  </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={onClose}>
+                <button
+                  onClick={onClose}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
                   <X className="h-5 w-5" />
-                </Button>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Current Fees List */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Active Global Fees
+                </h4>
+                {isLoading ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : feeConfigs.length > 0 ? (
+                  <div className="space-y-3">
+                    {feeConfigs.filter((f: any) => f.is_global).map((fee: any) => (
+                      <div
+                        key={fee.id}
+                        className={cn(
+                          "flex items-center justify-between p-4 rounded-xl transition-all border group",
+                          editingFeeId === fee.id
+                            ? "bg-accent/10 border-accent"
+                            : "bg-secondary/30 border-border"
+                        )}
+                      >
+                        <div>
+                          <p className="font-semibold text-foreground">{fee.name}</p>
+                          <p className="text-sm text-muted-foreground">₦{fee.amount.toLocaleString()} / month</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => startEdit(fee)}
+                            className={cn(
+                              "transition-opacity",
+                              editingFeeId === fee.id ? "text-accent" : "opacity-0 group-hover:opacity-100 text-muted-foreground"
+                            )}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteFee(fee.id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 rounded-xl border border-dashed border-border bg-secondary/10">
+                    <p className="text-muted-foreground text-sm">No global fees configured yet.</p>
+                  </div>
+                )}
               </div>
 
-              {/* Content */}
-              <form onSubmit={handleSubmit} className="p-6 space-y-5">
-                {/* Current Fee Display */}
-                <div className="p-4 rounded-xl bg-secondary/50 border border-border">
-                  <p className="text-sm text-muted-foreground mb-1">Current Fee</p>
-                  <p className="text-2xl font-display font-bold text-foreground">
-                    ₦{new Intl.NumberFormat('en-NG').format(estate.globalFee)}
-                  </p>
-                </div>
-
-                {/* Fee Input */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    New Monthly Fee
-                  </label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      ₦
-                    </div>
-                    <input
-                      type="text"
-                      value={fee}
-                      onChange={(e) => setFee(e.target.value.replace(/[^0-9]/g, ''))}
-                      placeholder="50,000"
-                      className={cn(
-                        "w-full pl-8 pr-4 py-3 rounded-lg border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent transition-all",
-                        errors.fee ? "border-destructive" : "border-input"
-                      )}
-                    />
-                  </div>
-                  {errors.fee && (
-                    <p className="mt-2 text-sm text-destructive flex items-center gap-1">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.fee}
-                    </p>
+              {/* Add/Edit Form */}
+              <form onSubmit={handleSubmit} className="space-y-4 pt-6 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                    {editingFeeId ? 'Edit Fee' : 'Add New Fee'}
+                  </h4>
+                  {editingFeeId && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={cancelEdit}
+                      className="text-xs h-7 gap-1"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Reset
+                    </Button>
                   )}
                 </div>
-
-                {/* Confirm Fee Input */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Confirm New Fee
-                  </label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      ₦
-                    </div>
-                    <input
-                      type="text"
-                      value={confirmFee}
-                      onChange={(e) => setConfirmFee(e.target.value.replace(/[^0-9]/g, ''))}
-                      placeholder="50,000"
-                      className={cn(
-                        "w-full pl-8 pr-4 py-3 rounded-lg border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent transition-all",
-                        errors.confirmFee ? "border-destructive" : "border-input"
-                      )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fee-name">Fee Name</Label>
+                    <Input
+                      id="fee-name"
+                      placeholder="e.g. Security Fee"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     />
                   </div>
-                  {errors.confirmFee && (
-                    <p className="mt-2 text-sm text-destructive flex items-center gap-1">
-                      <AlertCircle className="h-4 w-4" />
-                      {errors.confirmFee}
-                    </p>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="fee-amount">Amount (₦)</Label>
+                    <Input
+                      id="fee-amount"
+                      type="number"
+                      placeholder="0.00"
+                      required
+                      value={formData.amount}
+                      onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    />
+                  </div>
                 </div>
-
-                {/* Submit */}
+                <div className="space-y-2">
+                  <Label htmlFor="fee-desc">Description (Optional)</Label>
+                  <Input
+                    id="fee-desc"
+                    placeholder="Brief detail about the fee"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  />
+                </div>
                 <Button
                   type="submit"
-                  variant={success ? "success" : "hero"}
-                  size="lg"
-                  className="w-full"
-                  disabled={success}
+                  variant={editingFeeId ? "outline" : "hero"}
+                  className={cn("w-full transition-all", editingFeeId && "border-accent text-accent hover:bg-accent/5")}
+                  disabled={createFeeMutation.isPending || updateFeeMutation.isPending}
                 >
-                  {success ? (
+                  {createFeeMutation.isPending || updateFeeMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : editingFeeId ? (
                     <>
-                      <Check className="h-5 w-5" />
-                      Fee Updated!
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Update Fee Configuration
                     </>
                   ) : (
-                    'Update Global Fee'
+                    <>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Global Fee
+                    </>
                   )}
                 </Button>
               </form>
             </div>
+
+            <div className="p-6 border-t border-border bg-secondary/10 rounded-b-2xl">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={onClose}
+              >
+                Close Manager
+              </Button>
+            </div>
           </motion.div>
-        </>
+        </div>
       )}
     </AnimatePresence>
   );

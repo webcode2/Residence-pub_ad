@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Mail, Lock, Building2, Chrome, ArrowRight, Play, Loader2 } from "lucide-react";
+import { Mail, Lock, Building2, Chrome, ArrowRight, Play, Loader2, AlertCircle } from "lucide-react";
 import { loginAction } from "@/actions/auth";
 import { toast } from "sonner";
+import { useUser } from "@/contexts/UserContext";
+import { useEstate } from "@/contexts/EstateContext";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +23,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const LoginSchema = z.object({
     appId: z.string().min(3, "App ID is required"),
@@ -30,7 +33,10 @@ const LoginSchema = z.object({
 
 export default function LoginPage() {
     const router = useRouter();
+    const { refreshUser } = useUser();
+    const { updateEstate } = useEstate();
     const [isLoading, setIsLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const form = useForm<z.infer<typeof LoginSchema>>({
         resolver: zodResolver(LoginSchema),
         defaultValues: {
@@ -42,6 +48,7 @@ export default function LoginPage() {
 
     async function onSubmit(values: z.infer<typeof LoginSchema>) {
         setIsLoading(true);
+        setErrorMessage(null);
         try {
             const result = await loginAction(values);
 
@@ -49,13 +56,27 @@ export default function LoginPage() {
                 toast.success("Please enter your 2FA code.");
                 router.push("/2fa");
             } else if (result.error) {
+                setErrorMessage(result.error);
                 toast.error(result.error);
             } else {
+                localStorage.setItem('app_id', values.appId);
+                if (result.data?.token?.access_token) {
+                    localStorage.setItem('access_token', result.data.token.access_token);
+                }
+
+                // Refresh contexts before navigation
+                updateEstate({ appId: values.appId });
+                await refreshUser();
+
                 toast.success("Login successful!");
                 router.push("/dashboard");
             }
-        } catch (error) {
-            toast.error("Something went wrong. Please try again.");
+        } catch (error: any) {
+            // Show the real error for debugging
+            const msg = error?.message || "Something went wrong. Please check your connection and try again.";
+            console.error("[LoginPage] Outer catch error:", error);
+            setErrorMessage(msg);
+            toast.error(msg);
         } finally {
             setIsLoading(false);
         }
@@ -87,6 +108,16 @@ export default function LoginPage() {
                     </div>
                 </div>
             </div>
+
+            {errorMessage && (
+                <Alert variant="destructive" className="rounded-xl border-red-200 bg-red-50 text-red-900">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertTitle className="font-bold">Login Failed</AlertTitle>
+                    <AlertDescription className="font-medium">
+                        {errorMessage}
+                    </AlertDescription>
+                </Alert>
+            )}
 
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

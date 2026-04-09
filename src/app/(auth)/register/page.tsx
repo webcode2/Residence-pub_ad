@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Building2, User, Mail, Lock, Chrome, ArrowRight, ShieldCheck, Loader2 } from "lucide-react";
+import { Building2, User, Mail, Lock, Chrome, ArrowRight, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { registerAction } from "@/actions/auth";
 import { toast } from "sonner";
+import { useUser } from "@/contexts/UserContext";
+import { useEstate } from "@/contexts/EstateContext";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +23,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const RegisterSchema = z.object({
     estateName: z.string().min(3, "Estate name must be at least 3 characters"),
@@ -32,7 +35,10 @@ const RegisterSchema = z.object({
 
 export default function RegisterPage() {
     const router = useRouter();
+    const { refreshUser } = useUser();
+    const { updateEstate } = useEstate();
     const [isLoading, setIsLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const form = useForm<z.infer<typeof RegisterSchema>>({
         resolver: zodResolver(RegisterSchema),
         defaultValues: {
@@ -46,16 +52,34 @@ export default function RegisterPage() {
 
     async function onSubmit(values: z.infer<typeof RegisterSchema>) {
         setIsLoading(true);
+        setErrorMessage(null);
         try {
             const result = await registerAction(values);
             if (result.success) {
+                // Store appId and token in localStorage for frontend state
+                if (result.data?.app_id) {
+                    localStorage.setItem('app_id', result.data.app_id);
+                }
+                if (result.data?.token?.access_token) {
+                    localStorage.setItem('access_token', result.data.token.access_token);
+                }
+
+                // Refresh contexts before navigation
+                if (result.data?.app_id) {
+                    updateEstate({ appId: result.data.app_id });
+                }
+                await refreshUser();
+
                 toast.success("Account created successfully!");
                 router.push("/register/success");
             } else {
+                setErrorMessage(result.error || "Failed to create account.");
                 toast.error(result.error || "Failed to create account.");
             }
         } catch (error) {
-            toast.error("An error occurred. Please try again.");
+            const msg = "An error occurred. Please check your connection and try again.";
+            setErrorMessage(msg);
+            toast.error(msg);
         } finally {
             setIsLoading(false);
         }
@@ -67,6 +91,15 @@ export default function RegisterPage() {
                 <h1 className="text-3xl font-black text-blue-900 tracking-tight">Register Estate</h1>
                 <p className="text-slate-500 font-medium">Secure your community with ResidentPass.</p>
             </div>
+            {errorMessage && (
+                <Alert variant="destructive" className="rounded-xl border-red-200 bg-red-50 text-red-900">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertTitle className="font-bold">Registration Failed</AlertTitle>
+                    <AlertDescription className="font-medium">
+                        {errorMessage}
+                    </AlertDescription>
+                </Alert>
+            )}
 
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

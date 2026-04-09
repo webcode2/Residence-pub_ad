@@ -16,7 +16,12 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useReports, useCreateReport, useUpdateReport, Report } from '@/hooks/use-reports';
+import { useUser } from '@/contexts/UserContext';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
+/* 
 interface Incident {
     id: string;
     title: string;
@@ -39,43 +44,31 @@ const mockIncidents: Incident[] = [
         timestamp: '2024-01-18T14:30:00',
         status: 'investigating',
     },
-    {
-        id: '2',
-        title: 'Power Outage - Generator Malfunction',
-        description: 'Backup generator failed to start during scheduled PHCN outage. Affected blocks A-D.',
-        severity: 'medium',
-        location: 'Generator House',
-        reportedBy: 'Facility Manager',
-        timestamp: '2024-01-17T09:15:00',
-        status: 'resolved',
-    },
-    {
-        id: '3',
-        title: 'Suspicious Package Found',
-        description: 'Unattended package discovered near main gate. Package was inspected and found to be harmless.',
-        severity: 'high',
-        location: 'Main Gate',
-        reportedBy: 'Officer Chidi',
-        timestamp: '2024-01-16T16:45:00',
-        status: 'resolved',
-    },
-    {
-        id: '4',
-        title: 'Noise Complaint - Unit 15C',
-        description: 'Multiple complaints about loud music from unit 15C. Resident was warned.',
-        severity: 'low',
-        location: 'Block C',
-        reportedBy: 'Estate Admin',
-        timestamp: '2024-01-15T21:00:00',
-        status: 'resolved',
-    },
+    ...
 ];
+*/
 
 export default function Reports() {
     const [broadcastOpen, setBroadcastOpen] = useState(false);
     const [broadcastMessage, setBroadcastMessage] = useState('');
     const [broadcastSent, setBroadcastSent] = useState(false);
     const [newIncidentOpen, setNewIncidentOpen] = useState(false);
+
+    // New Incident State
+    const [formData, setFormData] = useState({
+        title: '',
+        description: '',
+        severity: 'low' as 'low' | 'medium' | 'high',
+        location: '',
+        is_anonymous: false
+    });
+
+    const { user } = useUser();
+    const appId = user?.app_id || '';
+    const { data: reports = [], isLoading } = useReports(appId);
+    const createMutation = useCreateReport(appId);
+    const updateMutation = useUpdateReport(appId);
+    const isAdmin = user?.roles?.some(r => r.toLowerCase() === 'caretaker' || r.toLowerCase() === 'saas_owner');
 
     const handleBroadcast = () => {
         if (!broadcastMessage.trim()) return;
@@ -85,6 +78,27 @@ export default function Reports() {
             setBroadcastMessage('');
             setBroadcastOpen(false);
         }, 2000);
+    };
+
+    const handleCreateReport = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await createMutation.mutateAsync(formData);
+            toast.success("Incident reported successfully");
+            setNewIncidentOpen(false);
+            setFormData({ title: '', description: '', severity: 'low', location: '', is_anonymous: false });
+        } catch (error: any) {
+            toast.error(error.response?.data?.detail || "Failed to submit report");
+        }
+    };
+
+    const handleStatusUpdate = async (id: string, status: Report['status']) => {
+        try {
+            await updateMutation.mutateAsync({ id, data: { status } });
+            toast.success(`Report status updated to ${status}`);
+        } catch (error: any) {
+            toast.error(error.response?.data?.detail || "Failed to update status");
+        }
     };
 
     const severityColors = {
@@ -132,7 +146,9 @@ export default function Reports() {
                         </div>
                         <span className="text-sm font-medium text-muted-foreground">Open Incidents</span>
                     </div>
-                    <span className="text-3xl font-display font-bold text-foreground">3</span>
+                    <span className="text-3xl font-display font-bold text-foreground">
+                        {reports.filter(r => r.status === 'open').length}
+                    </span>
                 </div>
                 <div className="stat-card">
                     <div className="flex items-center gap-3 mb-2">
@@ -141,16 +157,20 @@ export default function Reports() {
                         </div>
                         <span className="text-sm font-medium text-muted-foreground">Investigating</span>
                     </div>
-                    <span className="text-3xl font-display font-bold text-foreground">1</span>
+                    <span className="text-3xl font-display font-bold text-foreground">
+                        {reports.filter(r => r.status === 'investigating').length}
+                    </span>
                 </div>
                 <div className="stat-card">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
                             <Check className="h-5 w-5 text-success" />
                         </div>
-                        <span className="text-sm font-medium text-muted-foreground">Resolved (30d)</span>
+                        <span className="text-sm font-medium text-muted-foreground">Resolved (Total)</span>
                     </div>
-                    <span className="text-3xl font-display font-bold text-foreground">24</span>
+                    <span className="text-3xl font-display font-bold text-foreground">
+                        {reports.filter(r => r.status === 'resolved').length}
+                    </span>
                 </div>
             </div>
 
@@ -168,7 +188,16 @@ export default function Reports() {
                 </div>
 
                 <div className="divide-y divide-border">
-                    {mockIncidents.map((incident) => (
+                    {isLoading ? (
+                        <div className="p-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                            <Loader2 className="h-8 w-8 animate-spin text-accent" />
+                            <p>Loading security reports...</p>
+                        </div>
+                    ) : reports.length === 0 ? (
+                        <div className="p-12 text-center text-muted-foreground">
+                            No security incidents reported yet.
+                        </div>
+                    ) : reports.map((incident) => (
                         <div
                             key={incident.id}
                             className="p-4 hover:bg-secondary/30 transition-colors"
@@ -198,11 +227,11 @@ export default function Reports() {
                                         </span>
                                         <span className="flex items-center gap-1">
                                             <User className="h-3.5 w-3.5" />
-                                            {incident.reportedBy}
+                                            {incident.reported_by_name}
                                         </span>
                                         <span className="flex items-center gap-1">
                                             <Clock className="h-3.5 w-3.5" />
-                                            {new Date(incident.timestamp).toLocaleDateString('en-US', {
+                                            {new Date(incident.created_at).toLocaleDateString('en-US', {
                                                 month: 'short',
                                                 day: 'numeric',
                                                 hour: '2-digit',
@@ -211,85 +240,136 @@ export default function Reports() {
                                         </span>
                                     </div>
                                 </div>
-                                <Button variant="ghost" size="sm">
-                                    <FileText className="h-4 w-4" />
-                                </Button>
+                                {isAdmin && incident.status !== 'resolved' && (
+                                    <div className="flex flex-col gap-2">
+                                        {incident.status === 'open' && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleStatusUpdate(incident.id, 'investigating')}
+                                                disabled={updateMutation.isPending}
+                                            >
+                                                Investigate
+                                            </Button>
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-success hover:text-success hover:bg-success/10"
+                                            onClick={() => handleStatusUpdate(incident.id, 'resolved')}
+                                            disabled={updateMutation.isPending}
+                                        >
+                                            Resolve
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
                 </div>
             </motion.div>
 
-            {/* Broadcast Modal */}
+            {/* New Incident Modal */}
             <AnimatePresence>
-                {broadcastOpen && (
-                    <>
+                {newIncidentOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            onClick={() => setBroadcastOpen(false)}
-                            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+                            onClick={() => setNewIncidentOpen(false)}
+                            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         />
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md z-50"
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="relative w-full max-w-lg bg-card rounded-2xl shadow-2xl border border-border overflow-hidden z-10"
                         >
-                            <div className="bg-card rounded-2xl shadow-xl border border-border overflow-hidden">
-                                <div className="flex items-center justify-between p-6 border-b border-border">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
-                                            <Bell className="h-5 w-5 text-accent" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-lg font-display font-bold text-foreground">
-                                                Estate Broadcast
-                                            </h3>
-                                            <p className="text-sm text-muted-foreground">
-                                                Send to all 1,248 residents
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Button variant="ghost" size="icon" onClick={() => setBroadcastOpen(false)}>
-                                        <X className="h-5 w-5" />
-                                    </Button>
-                                </div>
-                                <div className="p-6">
-                                    <textarea
-                                        value={broadcastMessage}
-                                        onChange={(e) => setBroadcastMessage(e.target.value)}
-                                        placeholder="Type your broadcast message..."
-                                        rows={4}
-                                        className="w-full p-4 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent resize-none"
-                                    />
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                        This message will be sent via push notification and SMS to all registered residents.
-                                    </p>
-                                    <Button
-                                        variant={broadcastSent ? "success" : "hero"}
-                                        size="lg"
-                                        className="w-full mt-4"
-                                        onClick={handleBroadcast}
-                                        disabled={broadcastSent || !broadcastMessage.trim()}
-                                    >
-                                        {broadcastSent ? (
-                                            <>
-                                                <Check className="h-5 w-5" />
-                                                Broadcast Sent!
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Send className="h-5 w-5" />
-                                                Send Broadcast
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
+                            <div className="flex items-center justify-between p-6 border-b border-border">
+                                <h3 className="text-xl font-display font-bold text-foreground">Report Incident</h3>
+                                <Button variant="ghost" size="icon" onClick={() => setNewIncidentOpen(false)}>
+                                    <X className="h-5 w-5" />
+                                </Button>
                             </div>
+                            <form onSubmit={handleCreateReport} className="p-6 space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-foreground">Incident Title</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        placeholder="e.g. Suspicious activity near Gate A"
+                                        className="w-full p-3 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-accent outline-none"
+                                        value={formData.title}
+                                        onChange={e => setFormData({ ...formData, title: e.target.value })}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-foreground">Location</label>
+                                        <input
+                                            required
+                                            type="text"
+                                            placeholder="e.g. Block C Parking"
+                                            className="w-full p-3 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-accent outline-none"
+                                            value={formData.location}
+                                            onChange={e => setFormData({ ...formData, location: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-foreground">Severity</label>
+                                        <select
+                                            className="w-full p-3 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-accent outline-none appearance-none"
+                                            value={formData.severity}
+                                            onChange={e => setFormData({ ...formData, severity: e.target.value as any })}
+                                        >
+                                            <option value="low">Low</option>
+                                            <option value="medium">Medium</option>
+                                            <option value="high">High</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-foreground">Details</label>
+                                    <textarea
+                                        required
+                                        rows={4}
+                                        placeholder="Describe what happened..."
+                                        className="w-full p-3 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-accent outline-none resize-none"
+                                        value={formData.description}
+                                        onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2 p-3 bg-secondary/20 rounded-lg">
+                                    <input
+                                        type="checkbox"
+                                        id="anonymous"
+                                        className="w-4 h-4 rounded border-input bg-background text-accent focus:ring-accent"
+                                        checked={formData.is_anonymous}
+                                        onChange={e => setFormData({ ...formData, is_anonymous: e.target.checked })}
+                                    />
+                                    <label htmlFor="anonymous" className="text-sm font-medium text-foreground cursor-pointer">
+                                        Report Anonymously
+                                    </label>
+                                    <span className="text-[10px] text-muted-foreground ml-auto bg-background/50 px-2 py-0.5 rounded">
+                                        Identity hidden from residents
+                                    </span>
+                                </div>
+                                <Button
+                                    type="submit"
+                                    className="w-full py-6"
+                                    variant="hero"
+                                    disabled={createMutation.isPending}
+                                >
+                                    {createMutation.isPending ? (
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                    ) : (
+                                        "Submit Security Report"
+                                    )}
+                                </Button>
+                            </form>
                         </motion.div>
-                    </>
+                    </div>
                 )}
             </AnimatePresence>
         </div>
