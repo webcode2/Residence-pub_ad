@@ -21,20 +21,20 @@ import {
     X,
     Edit,
     Trash2,
-    Banknote
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import Papa from 'papaparse';
+import {uploadLandlordFile} from '@/actions/directory';
+import {LandlordOnboardingTracker} from '@/components/LandlordOnboardingTracker';
 
 
 import { useResidents, useImportLandlords, useRevokeUser, useUpdateUser, useDeleteUser } from '@/hooks/use-residents';
 import { useUser } from '@/contexts/UserContext';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { SetGlobalFeeModal } from '@/components/dashboard/SetGlobalFeeModal';
 
 interface Occupant {
     id: string;
@@ -42,6 +42,8 @@ interface Occupant {
     roles: string[];
     email: string;
     is_revoked: boolean;
+    relationship_type?: string;
+    invitation_id?: string;
 }
 
 interface Resident {
@@ -50,6 +52,7 @@ interface Resident {
     email: string;
     house_number: string | null;
     street_name: string | null;
+    phone?: string;
     registration_token: string;
     status: 'active' | 'suspended' | 'pending';
     type: 'permanent' | 'tenant' | 'caretaker';
@@ -66,18 +69,20 @@ export default function Residents() {
     const [manualModal, setManualModal] = useState(false);
     const [editModal, setEditModal] = useState<Resident | null>(null);
     const [deleteModal, setDeleteModal] = useState<Resident | null>(null);
-    const [feeModal, setFeeModal] = useState(false);
     const [manualFormData, setManualFormData] = useState({
         name: '',
+        phone: '',
         email: '',
         house_number: '',
         street_name: ''
     });
     const [isImporting, setIsImporting] = useState(false);
+    const [trackerVersion,setTrackerVersion]=useState(0);
+    const [importError,setImportError]=useState('');
     const { user: currentUser } = useUser();
 
     const appId = currentUser?.app_id || '';
-    const { data: residents = [], isLoading, isError } = useResidents(appId);
+    const { data: residents = [], isLoading, isError, refetch } = useResidents(appId);
     const importMutation = useImportLandlords(appId);
     const revokeMutation = useRevokeUser(appId);
     const updateMutation = useUpdateUser(appId);
@@ -128,38 +133,18 @@ export default function Residents() {
         document.body.removeChild(link);
     };
 
-    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        setIsImporting(true);
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            complete: async (results) => {
-                const formattedData = results.data.map((row: any) => ({
-                    email: row.Email || row.email,
-                    name: row.Landlord || row.Name || row.full_name || row.name,
-                    house_number: row.Unit || row.house_number || row.unit,
-                    street_name: row.Street || row.street_name || row.street
-                })).filter(r => r.email);
-
-                try {
-                    await importMutation.mutateAsync(formattedData);
-                    setIsImporting(false);
-                    setImportModal(false);
-                    toast.success("Residents imported successfully");
-                } catch (error) {
-                    console.error("Import failed", error);
-                    setIsImporting(false);
-                    toast.error("Failed to import residents");
-                }
-            },
-            error: (error) => {
-                console.error('CSV Parsing Error:', error);
-                setIsImporting(false);
-            }
-        });
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file=event.target.files?.[0];
+        if(!file)return;
+        setIsImporting(true);setImportError('');
+        try {
+            const form=new FormData();form.set('file',file);
+            const results=await uploadLandlordFile(form);
+            const queued=results.filter((r:{status:string})=>r.status==='queued').length;
+            toast.success(`${queued} landlord jobs queued. Follow progress in the onboarding tracker.`);
+            setTrackerVersion(v=>v+1);setImportModal(false);
+        } catch(error) {setImportError(error instanceof Error?error.message:'Import failed. Check the file and retry.');}
+        finally {setIsImporting(false);event.target.value='';}
     };
 
     const handleManualSubmit = async (e: React.FormEvent) => {
@@ -169,10 +154,11 @@ export default function Residents() {
             const results = await importMutation.mutateAsync([manualFormData]);
             const result = results[0];
 
-            if (result.status === 'success') {
-                toast.success("Landlord added successfully");
+            if (result.status === 'queued') {
+                toast.success("Landlord onboarding queued. Track the welcome email below.");
                 setManualModal(false);
-                setManualFormData({ name: '', email: '', house_number: '', street_name: '' });
+                setManualFormData({ name: '', phone: '', email: '', house_number: '', street_name: '' });
+                setTrackerVersion(v=>v+1);
             } else if (result.status === 'skipped') {
                 toast.warning(`Skipped: ${result.message || "User already exists"}`);
             } else {
@@ -246,7 +232,7 @@ export default function Residents() {
     };
 
     const typeColors = {
-        permanent: 'bg-blue-100 text-blue-700 border-blue-200',
+        permanent: 'bg-primary/15 text-foreground border-primary/30',
         tenant: 'bg-purple-100 text-purple-700 border-purple-200',
         caretaker: 'bg-amber-100 text-amber-700 border-amber-200',
     };
@@ -264,10 +250,7 @@ export default function Residents() {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" className="hidden lg:flex" onClick={() => setFeeModal(true)}>
-                        <Banknote className="h-4 w-4 mr-2 text-success" />
-                        Set Global Fee
-                    </Button>
+
                     <Button variant="outline" className="hidden lg:flex" onClick={handleExport}>
                         <Download className="h-4 w-4 mr-2" />
                         Export User Data
@@ -295,6 +278,7 @@ export default function Residents() {
                 />
             </div>
 
+            <LandlordOnboardingTracker version={trackerVersion}/>
             {/* Table */}
             <div className="bg-card rounded-xl border border-border overflow-hidden relative">
                 {isLoading && (
@@ -324,12 +308,12 @@ export default function Residents() {
                                         <div className="flex flex-col items-center gap-2 text-destructive">
                                             <AlertCircle className="h-8 w-8" />
                                             <p>Failed to load resident directory</p>
-                                            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Retry</Button>
+                                            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
                                         </div>
                                     </td>
                                 </tr>
                             )}
-                            {!isLoading && filteredResidents.length === 0 && (
+                            {!isLoading && !isError && filteredResidents.length === 0 && (
                                 <tr>
                                     <td colSpan={6} className="p-8 text-center text-muted-foreground">
                                         No residents found matching your search.
@@ -357,14 +341,16 @@ export default function Residents() {
                                                         <span className="text-accent/70 font-bold tracking-widest uppercase text-[10px]">YOU</span>
                                                     ) : resident.email}
                                                 </p>
+                                                {resident.phone&&<p className="text-sm text-muted-foreground">{resident.phone}</p>}
                                             </div>
                                         </td>
                                         <td className="p-4 hidden md:table-cell">
                                             <div className="flex items-center gap-2">
                                                 <code className="px-2 py-1 rounded bg-secondary text-sm font-mono">
-                                                    {resident.registration_token}
+                                                    {resident.registration_token || '—'}
                                                 </code>
                                                 <button
+                                                    disabled={!resident.registration_token}
                                                     onClick={() => copyToken(resident.registration_token)}
                                                     className="p-1.5 rounded hover:bg-secondary transition-colors"
                                                 >
@@ -444,9 +430,7 @@ export default function Residents() {
                                                                     <Users className="h-3 w-3" />
                                                                     Registered Occupants ({resident.occupants.length})
                                                                 </h4>
-                                                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold uppercase tracking-tighter">
-                                                                    <UserPlus className="h-3 w-3 mr-1" /> Add Occupant
-                                                                </Button>
+                                                                <p className="text-xs text-muted-foreground">Invited by this landlord</p>
                                                             </div>
                                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4 pb-4">
                                                                 {resident.occupants.map((occ) => (
@@ -464,7 +448,7 @@ export default function Residents() {
                                                                                         <span className="text-accent font-black tracking-widest uppercase text-xs">YOU</span>
                                                                                     ) : occ.full_name}
                                                                                 </p>
-                                                                                <p className="text-[10px] text-muted-foreground uppercase">{(occ.roles || []).join(', ')}</p>
+                                                                                <p className="text-xs text-muted-foreground">{occ.email}</p><p className="text-xs text-muted-foreground capitalize">{occ.relationship_type||'Household member'}{occ.invitation_id?` · Invitation ${occ.invitation_id.slice(0,8)}`:''}</p>
                                                                             </div>
                                                                         </div>
                                                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -643,7 +627,7 @@ export default function Residents() {
                                             Bulk Import Residents
                                         </h3>
                                         <p className="text-sm text-muted-foreground">
-                                            Upload your CSV template to onboard units
+                                            Upload a CSV or Excel file to onboard landlords
                                         </p>
                                     </div>
                                 </div>
@@ -661,7 +645,7 @@ export default function Residents() {
                                         type="file"
                                         id="csv-upload"
                                         className="hidden"
-                                        accept=".csv"
+                                        accept=".csv,.xlsx,.xls"
                                         onChange={handleFileUpload}
                                         disabled={isImporting}
                                     />
@@ -676,21 +660,22 @@ export default function Residents() {
                                             <FileText className="h-6 w-6 text-primary" />
                                         </div>
                                         <p className="font-semibold text-foreground">
-                                            {isImporting ? 'Processing file...' : 'Click to upload or drag and drop'}
+                                            {isImporting ? 'Processing file...' : 'Choose a landlord spreadsheet'}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            Maximum file size: 5MB (CSV only)
+                                            CSV, XLSX or XLS · Maximum 5 MB · 500 landlords per batch
                                         </p>
                                     </label>
                                 </div>
 
                                 <div className="space-y-4">
+                                    {importError&&<p role="alert" className="text-sm text-destructive">{importError}</p>}
                                     <h4 className="text-sm font-semibold text-foreground">Guidelines:</h4>
                                     <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4">
                                         <li>Use the standardized CSV template for best results.</li>
-                                        <li>Ensure all mandatory fields (Landlord Name, Email, Unit) are filled.</li>
-                                        <li>The <b>app_id</b> will be automatically appended to each entry.</li>
-                                        <li>Duplicate units will be skipped or updated based on your settings.</li>
+                                        <li>Required: Name, Email, Phone and House Number. Keep phone and house numbers as text in Excel.</li>
+                                        <li>Accounts are scoped to your estate. Every landlord must change their temporary password on first login.</li>
+                                        <li>Existing emails are skipped. Failed jobs can be retried from the tracker.</li>
                                     </ul>
                                     <a
                                         href="/import-template.csv"
@@ -781,6 +766,7 @@ export default function Residents() {
                                         disabled={isImporting}
                                     />
                                 </div>
+                                <div className="space-y-2"><Label htmlFor="phone">Phone number</Label><Input id="phone" type="tel" required value={manualFormData.phone} onChange={e=>setManualFormData({...manualFormData,phone:e.target.value})} disabled={isImporting}/></div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="house_number">House Number</Label>
@@ -1015,8 +1001,6 @@ export default function Residents() {
                 )}
             </AnimatePresence>
 
-            {/* Global Fee Modal */}
-            <SetGlobalFeeModal open={feeModal} onClose={() => setFeeModal(false)} />
         </div>
     );
 }

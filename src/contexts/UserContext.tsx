@@ -29,6 +29,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
             const session = await getSessionAction();
             if (session && session.user) {
                 setUser(session.user);
+            } else {
+                setUser(null);
             }
         } catch (error) {
             console.error("Failed to refresh user context", error);

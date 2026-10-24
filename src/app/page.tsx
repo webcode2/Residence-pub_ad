@@ -1,23 +1,75 @@
 "use client";
 
-import { Hero } from '@/components/landing/Hero';
-import { Journey } from '@/components/landing/Journey';
-import { Features } from '@/components/landing/Features';
-import { Pricing } from '@/components/landing/Pricing';
-import { TrustTicker } from '@/components/landing/TrustTicker';
-import { FAQ } from '@/components/landing/FAQ';
-import { Footer } from '@/components/landing/Footer';
+import Link from 'next/link';
+import { useState } from 'react';
+import { ArrowUpRight, ArrowRight, Check, ChevronDown, ShieldCheck, Users, KeyRound, MessagesSquare, Building2, Receipt, Menu, X, LockKeyhole, ClipboardList, DoorOpen, LayoutDashboard, CircleCheck } from 'lucide-react';
+import { Brand } from '@/components/shared/Brand';
+
+const features = [
+    { icon: KeyRound, title: 'A better welcome at the gate.', text: 'Give visitors a digital access code. Help guards verify arrivals and keep a clear record of gate activity.', tag: 'ACCESS MANAGEMENT', wide: true },
+    { icon: MessagesSquare, title: 'Every conversation, accounted for.', text: 'Connect residents with the gatehouse. Review the full conversation history from your caretaker dashboard.', tag: 'RESIDENT–GUARD CHAT' },
+    { icon: Users, title: 'Know your community.', text: 'Keep residents, landlords, and security officers organised in one estate directory.', tag: 'RESIDENT DIRECTORY' },
+    { icon: Receipt, title: 'Bring the details together.', text: 'Review reports and share announcements from a central workspace.', tag: 'ESTATE OPERATIONS' },
+];
+const faqs = [
+    ['Who is the web dashboard for?', 'The dashboard is for estate caretakers. Each caretaker manages their own estate. Residents and security officers use their respective mobile app experiences.'],
+    ['How does visitor access work?', 'Residents create a visitor pass and share its access code with their guest. Security officers verify the code at the gate, and the access event is recorded.'],
+    ['Can a caretaker review resident–guard conversations?', 'Yes. The Conversation Logs page provides the full recorded history, including sender names, timestamps, officer badges and posts when available. Reviewing a log does not mark messages as read for either participant.'],
+    ['Will I see another estate’s information?', 'Your authenticated estate identity scopes access to your estate. Conversation log endpoints also independently check the caretaker role and estate on the backend.'],
+    ['How do we get started?', 'Register your estate and its caretaker account, sign in with your estate App ID, and begin setting up the resident directory and gate operations.'],
+];
+
+function Preview({ compact = false }: { compact?: boolean }) {
+    return <div className={`product-preview ${compact ? 'compact-preview' : ''}`} role="img" aria-label="Illustrative dashboard preview with sample resident, gate, and conversation activity">
+        <div className="preview-top"><span className="flex gap-1.5"><i /><i /><i /></span><span>Greenview Estate · workspace preview</span><LockKeyhole size={12} /></div>
+        <div className="preview-body">
+            <aside className="preview-nav"><Building2 size={22} /><span className="preview-nav-active"><LayoutDashboard size={15} />Overview</span><span><Users size={15} />Residents</span><span><DoorOpen size={15} />Access logs</span><span><MessagesSquare size={15} />Conversations</span><span><ClipboardList size={15} />Reports</span><div className="mt-auto text-[10px] text-white/50">CARETAKER WORKSPACE</div></aside>
+            <div className="preview-content"><div className="flex items-center justify-between"><span className="text-[10px] text-stone-500">YOUR ESTATE, AT A GLANCE</span><span className="preview-status">Example data</span></div><h3>Everything in its place.</h3><div className="preview-stats">{[['Residents', '248'], ['Gate entries', '36'], ['Open chats', '08']].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong><small>Estate overview</small></div>)}</div>
+                <div className="preview-lower"><div className="preview-chart"><span className="text-xs font-semibold">Gate activity</span><span className="block text-[10px] text-stone-500 mt-1">A week in your community</span><div className="preview-bars">{[40, 60, 45, 78, 54, 90, 67].map((height, i) => <div key={i}><span style={{ height: `${height}%` }} /><small>{['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}</small></div>)}</div></div><div className="preview-events"><span className="text-xs font-semibold">Recent activity</span>{[['Guest verified', 'Main gate · just now'], ['Message received', 'Gatehouse · 2 min ago'], ['Resident added', 'Directory · 12 min ago']].map(([label, sub]) => <div key={label}><span className="event-check"><Check size={11} /></span><span>{label}<small>{sub}</small></span></div>)}</div></div>
+            </div>
+        </div>
+    </div>;
+}
 
 export default function Landing() {
-    return (
-        <main className="overflow-x-hidden">
-            <Hero />
-            <Journey />
-            <Features />
-            <TrustTicker />
-            <Pricing />
-            <FAQ />
-            <Footer />
+    const [menu, setMenu] = useState(false);
+    const [role, setRole] = useState(0);
+    const roles = [
+        { name: 'For caretakers', title: 'One clear view. Fewer loose ends.', text: 'Move between your resident directory, gate activity, conversation logs and reports without losing the context of your estate.', points: ['A dedicated workspace for your estate', 'Recorded resident–guard conversation history', 'Estate announcements and operational oversight'], icon: LayoutDashboard },
+        { name: 'For residents', title: 'Everyday estate life, made easier.', text: 'Create visitor passes and stay connected with the gatehouse through the resident mobile experience.', points: ['Share digital visitor access codes', 'Message the gatehouse directly', 'Flag an emergency when you need help'], icon: Users },
+        { name: 'For security teams', title: 'More clarity at every checkpoint.', text: 'Give officers a focused gatehouse experience for verifying access and responding to residents.', points: ['Verify visitor codes at the gate', 'Reply with officer attribution', 'Use quick dispatch and delivery responses'], icon: ShieldCheck },
+    ];
+    const RoleIcon = roles[role].icon;
+    return <div className="marketing">
+        <a href="#main-content" className="skip-link">Skip to content</a>
+        <header className="marketing-header"><div className="marketing-container flex h-20 items-center justify-between gap-5"><Brand size="sm" />
+            <nav aria-label="Main navigation" className="hidden md:flex items-center gap-8 text-sm font-medium"><a href="#platform">Platform</a><a href="#how-it-works">How it works</a><a href="#plans">Plans</a><a href="#faq">FAQs</a></nav>
+            <div className="hidden md:flex items-center gap-5"><Link href="/login" className="text-sm font-semibold">Sign in</Link><Link href="/register" className="marketing-button small">Set up your estate<ArrowUpRight size={16} /></Link></div>
+            <button className="md:hidden p-3" aria-label={menu ? 'Close navigation' : 'Open navigation'} aria-expanded={menu} aria-controls="mobile-navigation" onClick={() => setMenu(!menu)}>{menu ? <X /> : <Menu />}</button>
+        </div>{menu && <nav id="mobile-navigation" aria-label="Mobile navigation" className="md:hidden marketing-container pb-5 grid gap-4">{[['Platform', '#platform'], ['How it works', '#how-it-works'], ['Plans', '#plans'], ['FAQs', '#faq'], ['Sign in', '/login'], ['Set up your estate', '/register']].map(([label, href]) => <Link onClick={() => setMenu(false)} key={href} href={href} className="py-2">{label}</Link>)}</nav>}</header>
+        <main id="main-content">
+            <section className="marketing-hero marketing-container">
+                <div className="hero-copy"><span className="eyebrow"><span className="status-dot" />A little order. A better community.</span>
+                    <h1>Your estate.<br />Working <span className="serif-word">beautifully.</span></h1>
+                    <p>From the first arrival to the last gatehouse message. Bring your residents, security team, and everyday operations into one considered workspace.</p>
+                    <div className="flex flex-wrap gap-3 mt-8"><Link href="/register" className="marketing-button">Set up your estate<ArrowUpRight size={18} /></Link><a href="#product-preview" className="marketing-button secondary">Explore the platform<ArrowRight size={18} /></a></div>
+                    <div className="hero-footnote"><ShieldCheck size={16} /><span>Built for caretakers. Connected to your whole estate.</span></div>
+                </div>
+                <div className="hero-visual"><div className="visual-grid" /><div className="hero-visual-label"><span className="status-dot" />ESTATE OPERATIONS, CONNECTED</div><Preview compact /><div className="hero-note"><span className="note-icon"><MessagesSquare size={20} /></span><div><strong>A clearer line of communication.</strong><span>Resident to guard. Visible to your caretaker.</span></div><ArrowUpRight size={18} /></div></div>
+            </section>
+            <div className="capability-strip"><div className="marketing-container">{[[KeyRound, 'Thoughtful access'], [Users, 'Connected residents'], [ShieldCheck, 'Informed guards'], [ClipboardList, 'Clear accountability']].map(([Icon, label]) => { const I = Icon as typeof KeyRound; return <span key={String(label)}><I size={19} />{String(label)}</span>; })}</div></div>
+            <section id="platform" className="marketing-section marketing-container">
+                <div className="section-heading"><div><span className="eyebrow">LESS FRICTION. MORE OVERSIGHT.</span><h2>The everyday details.<br /><span className="serif-word">Finally, together.</span></h2></div><p>Estate management is a collection of small moments. Residence helps you keep them connected, so your team can focus on the people behind them.</p></div>
+                <div className="feature-grid">{features.map((feature, index) => <article className={`feature-panel feature-${index}`} key={feature.tag}><div className="feature-icon"><feature.icon size={24} /></div><span className="eyebrow">{feature.tag}</span><h3>{feature.title}</h3><p>{feature.text}</p>{index === 0 && <div className="access-ticket"><div><span>VISITOR ACCESS</span><strong>A welcome without the wait.</strong></div><div className="ticket-code">RP · 8X42</div><ShieldCheck size={22} /></div>}{index === 1 && <div className="mini-conversation"><span>Resident · Unit 12</span><p>My guest will be arriving shortly.</p><span>Gatehouse officer</span><p className="guard-response">Noted. We’ll verify their code at the gate.</p></div>}</article>)}</div>
+            </section>
+            <section id="product-preview" className="workspace-section"><div className="marketing-container"><div className="section-heading"><div><span className="eyebrow">A WORKSPACE WITH PERSPECTIVE</span><h2>See the whole picture.<br /><span className="serif-word">Stay close to the details.</span></h2></div><p>A focused caretaker dashboard gives you an organised view of your estate, with the context to follow up where it matters.</p></div><Preview /><p className="text-center text-xs text-stone-500 mt-5">Illustrative product preview. Figures shown are sample data.</p></div></section>
+            <section className="marketing-section marketing-container"><div className="roles-section"><div><span className="eyebrow">ONE ESTATE. EVERYONE CONNECTED.</span><h2>Different roles.<br /><span className="serif-word">A shared rhythm.</span></h2><div role="tablist" aria-label="Platform roles" className="role-tabs">{roles.map((item, i) => <button key={item.name} role="tab" id={`role-tab-${i}`} aria-controls="role-panel" aria-selected={role === i} tabIndex={role === i ? 0 : -1} onClick={() => setRole(i)} onKeyDown={e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); const next = (i + (e.key === 'ArrowRight' ? 1 : roles.length - 1)) % roles.length; setRole(next); document.getElementById(`role-tab-${next}`)?.focus(); } }}>{item.name}<ArrowUpRight size={17} /></button>)}</div></div><div role="tabpanel" id="role-panel" aria-labelledby={`role-tab-${role}`} className="role-panel"><RoleIcon size={34} strokeWidth={1.4} /><h3>{roles[role].title}</h3><p>{roles[role].text}</p><ul>{roles[role].points.map(point => <li key={point}><CircleCheck size={17} />{point}</li>)}</ul><Link href="/register" className="text-link">Bring your estate together<ArrowRight size={17} /></Link></div></div></section>
+            <section id="how-it-works" className="workflow-section marketing-container"><div className="section-heading"><div><span className="eyebrow">A CONSIDERED START</span><h2>From setup<br />to <span className="serif-word">everyday simplicity.</span></h2></div><Link href="/register" className="text-link">Get started<ArrowUpRight size={18} /></Link></div><div className="workflow-grid">{[['01', 'Make it your estate.', 'Create your estate and caretaker account. Use your estate App ID to sign in to your dedicated dashboard.'], ['02', 'Bring your people in.', 'Organise your residents and security officers, then prepare your gatehouse team for day-to-day access.'], ['03', 'Keep things moving.', 'Review arrivals, stay on top of conversations, and manage the details of your community from one place.']].map(([n, title, text]) => <article key={n}><span className="step-number">{n}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
+            <section className="security-section"><div className="marketing-container security-grid"><div><div className="security-emblem"><ShieldCheck size={54} strokeWidth={1} /></div><span className="eyebrow">ACCOUNTABILITY, BY DESIGN</span><h2>Your estate’s business.<br /><span className="serif-word">Your estate’s workspace.</span></h2><p>Give each person a clear role and each conversation a record. Oversight should feel straightforward.</p></div><div className="security-principles">{[[LockKeyhole, 'Estate-scoped access', 'Caretaker conversation access is checked against the authenticated estate on the backend.'], [ShieldCheck, 'A workspace for caretakers', 'The web dashboard is restricted to estate caretakers. Residents and guards have their own experiences.'], [MessagesSquare, 'History that keeps its context', 'Conversation logs retain sender names and officer details, and viewing them leaves participant read state unchanged.']].map(([Icon, title, text]) => { const I = Icon as typeof KeyRound; return <div key={String(title)}><I size={23} /><div><h3>{String(title)}</h3><p>{String(text)}</p></div></div>; })}</div></div></section>
+            <section id="plans" className="marketing-section marketing-container"><div className="section-heading"><div><span className="eyebrow">ROOM FOR YOUR COMMUNITY</span><h2>A good fit.<br /><span className="serif-word">At every stage.</span></h2></div><p>Start with your estate’s needs. Review available subscription options during setup and choose the right plan for your community.</p></div><div className="plan-grid">{[['Getting organised', 'Build a stronger foundation for everyday estate operations.', ['Resident directory', 'Visitor access workflows', 'Caretaker workspace']], ['Growing together', 'Bring more of your estate’s daily activity into view.', ['Conversation oversight', 'Estate announcements', 'Incident reports and follow-up']], ['Planning ahead', 'Understand what your estate needs before you expand.', ['Review available plan options', 'Assess your operating needs', 'Coordinate your estate setup']]].map(([title, text, items], i) => <article key={String(title)} className={i === 1 ? 'featured-plan' : ''}><span className="eyebrow">{i === 1 ? 'CONNECTED OPERATIONS' : i === 0 ? 'YOUR FOUNDATION' : 'YOUR NEXT CHAPTER'}</span><h3>{String(title)}</h3><p>{String(text)}</p><ul>{(items as string[]).map(item => <li key={item}><Check size={16} />{item}</li>)}</ul><Link href="/register" className={`marketing-button ${i === 1 ? '' : 'secondary'}`}>Explore estate setup<ArrowUpRight size={17} /></Link></article>)}</div><p className="text-sm text-stone-500 mt-5">Available subscription options and terms are confirmed during estate onboarding.</p></section>
+            <section id="faq" className="faq-section marketing-container"><div><span className="eyebrow">A FEW HELPFUL ANSWERS</span><h2>Before you<br /><span className="serif-word">move in.</span></h2></div><div>{faqs.map(([q, a]) => <details key={q}><summary>{q}<ChevronDown size={18} /></summary><p>{a}</p></details>)}</div></section>
+            <section className="closing-section marketing-container"><div><span className="eyebrow">MAKE ROOM FOR A BETTER EVERYDAY</span><h2>A well-run estate.<br />A better place to <span className="serif-word">call home.</span></h2></div><Link href="/register" className="marketing-button">Set up your estate<ArrowUpRight size={19} /></Link></section>
         </main>
-    );
+        <footer className="marketing-footer"><div className="marketing-container"><div className="footer-main"><div><Brand size="sm" /><p>A little order for the place you call home.</p></div><div><h3>Platform</h3><a href="#platform">Explore Residence</a><a href="#how-it-works">How it works</a><a href="#plans">Estate setup</a></div><div><h3>Your workspace</h3><Link href="/login">Caretaker sign in</Link><Link href="/register">Register your estate</Link><a href="#faq">FAQs</a></div><div><h3>The details</h3><Link href="/privacy">Privacy policy</Link><Link href="/terms">Terms of service</Link></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} Residence. All rights reserved.</span><span>Thoughtfully connected. Clearly managed.</span></div></div></footer>
+    </div>;
 }

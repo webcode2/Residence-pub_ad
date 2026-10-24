@@ -5,14 +5,9 @@ interface DashboardStats {
     totalResidents: number;
     activeVisitors: number;
     todayCheckins: number;
-    monthlyRevenue: number;
-    currentDues: number;
-    unpaidUnitsCount: number;
     residentTrend: number;
     visitorTrend: number;
     checkinTrend: number;
-    revenueTrend: number;
-    billingDistribution: { name: string; value: number; color: string }[];
 }
 
 export function useDashboardStats(appId: string) {

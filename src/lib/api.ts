@@ -34,7 +34,11 @@ api.interceptors.request.use(
 
         console.log(`[API REQUEST] ${config.method?.toUpperCase()} ${config.url}`);
         if (config.data && process.env.NODE_ENV !== "production") {
-            console.log("[API DATA]", JSON.stringify(config.data, null, 2));
+            const safeData = { ...config.data };
+            for (const field of ['password', 'token', 'access_token', 'code']) {
+                if (field in safeData) safeData[field] = '[REDACTED]';
+            }
+            console.log("[API DATA]", JSON.stringify(safeData, null, 2));
         }
 
         return config;

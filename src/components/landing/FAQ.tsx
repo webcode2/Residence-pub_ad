@@ -31,7 +31,7 @@ const faqs = [
   },
   {
     question: "Can we manage multiple estates from one account?",
-    answer: "Absolutely! Our Enterprise plan supports multi-estate management with consolidated billing, centralized reporting, and role-based access control. Perfect for property management companies overseeing multiple locations."
+    answer: "Absolutely! Our Enterprise plan supports multi-estate management with centralized reporting and role-based access control. Perfect for property management companies overseeing multiple locations."
   },
 ];
 

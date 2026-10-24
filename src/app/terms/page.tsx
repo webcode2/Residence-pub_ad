@@ -37,7 +37,7 @@ export default function TermsPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100">
+        <div className="min-h-screen bg-background font-sans text-foreground selection:bg-primary/20">
             {/* Header */}
             <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 h-20">
                 <div className="container mx-auto px-6 h-full flex items-center justify-between">
@@ -54,17 +54,17 @@ export default function TermsPage() {
             <main className="pt-32 pb-20 px-6">
                 <div className="max-w-3xl mx-auto space-y-12">
                     <div className="space-y-4">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-900 text-xs font-bold uppercase tracking-wider">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 border border-primary/30 text-foreground text-xs font-bold uppercase tracking-wider">
                             Legal Documentation
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-black text-blue-900 tracking-tight">Terms and Conditions</h1>
+                        <h1 className="text-4xl md:text-5xl font-black text-foreground tracking-tight">Terms and Conditions</h1>
                         <p className="text-slate-500 font-medium">Last Updated: {lastUpdated}</p>
                     </div>
 
                     <div className="prose prose-slate max-w-none space-y-8">
                         {sections.map((section, index) => (
                             <section key={index} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm transition-all hover:shadow-md">
-                                <h3 className="text-xl font-black text-blue-900 mb-4">{section.title}</h3>
+                                <h3 className="text-xl font-black text-foreground mb-4">{section.title}</h3>
                                 <p className="text-slate-600 leading-relaxed font-medium">
                                     {section.content}
                                 </p>
@@ -72,14 +72,14 @@ export default function TermsPage() {
                         ))}
                     </div>
 
-                    <div className="p-8 bg-blue-900 rounded-[2.5rem] text-center space-y-6 shadow-xl shadow-blue-900/20">
+                    <div className="p-8 bg-[#070B0E] rounded-[2.5rem] text-center space-y-6 shadow-xl shadow-primary/20">
                         <h2 className="text-2xl font-black text-white">Questions about our terms?</h2>
-                        <p className="text-blue-100/80 font-medium max-w-md mx-auto">
+                        <p className="text-white/70 font-medium max-w-md mx-auto">
                             Our legal team is here to help you understand your rights and responsibilities.
                         </p>
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                             <Link href="mailto:legal@residentpass.com" className="w-full sm:w-auto">
-                                <Button className="w-full h-12 bg-white text-blue-900 hover:bg-emerald-400 hover:text-white transition-all font-bold rounded-xl px-8">
+                                <Button className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 transition-all font-bold rounded-xl px-8">
                                     Contact Support
                                 </Button>
                             </Link>

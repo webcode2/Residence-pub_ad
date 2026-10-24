@@ -88,11 +88,11 @@ export default function RegisterPage() {
     return (
         <div className="space-y-6">
             <div className="space-y-2 text-center lg:text-left">
-                <h1 className="text-3xl font-black text-blue-900 tracking-tight">Register Estate</h1>
-                <p className="text-slate-500 font-medium">Secure your community with ResidentPass.</p>
+                <h1 className="text-3xl font-medium text-foreground tracking-tight">Register Estate</h1>
+                <p className="text-slate-500 font-medium">Create your workspace, then verify a card to activate your free trial. Automatic monthly billing begins after the trial unless you cancel.</p>
             </div>
             {errorMessage && (
-                <Alert variant="destructive" className="rounded-xl border-red-200 bg-red-50 text-red-900">
+                <Alert variant="destructive" className="rounded-md border-red-200 bg-red-50 text-red-900">
                     <AlertCircle className="h-4 w-4 text-red-600" />
                     <AlertTitle className="font-bold">Registration Failed</AlertTitle>
                     <AlertDescription className="font-medium">
@@ -109,11 +109,11 @@ export default function RegisterPage() {
                             name="estateName"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Estate Name</FormLabel>
+                                    <FormLabel className="font-medium text-[11px] uppercase tracking-[0.2em] text-slate-400">Estate Name</FormLabel>
                                     <FormControl>
                                         <div className="relative">
                                             <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <Input placeholder="Oakwood Park" {...field} className="pl-10 h-12 bg-white border-slate-100 rounded-xl" />
+                                            <Input placeholder="Oakwood Park" {...field} className="pl-10 h-12 bg-white border-input rounded-md" />
                                         </div>
                                     </FormControl>
                                     <FormMessage />
@@ -125,11 +125,11 @@ export default function RegisterPage() {
                             name="adminName"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Admin Name</FormLabel>
+                                    <FormLabel className="font-medium text-[11px] uppercase tracking-[0.2em] text-slate-400">Admin Name</FormLabel>
                                     <FormControl>
                                         <div className="relative">
                                             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                            <Input placeholder="John Doe" {...field} className="pl-10 h-12 bg-white border-slate-100 rounded-xl" />
+                                            <Input placeholder="John Doe" {...field} className="pl-10 h-12 bg-white border-input rounded-md" />
                                         </div>
                                     </FormControl>
                                     <FormMessage />
@@ -143,11 +143,11 @@ export default function RegisterPage() {
                         name="email"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel className="font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Work Email</FormLabel>
+                                <FormLabel className="font-medium text-[11px] uppercase tracking-[0.2em] text-slate-400">Work Email</FormLabel>
                                 <FormControl>
                                     <div className="relative">
                                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                        <Input placeholder="admin@estate.com" {...field} className="pl-10 h-12 bg-white border-slate-100 rounded-xl" />
+                                        <Input placeholder="admin@estate.com" {...field} className="pl-10 h-12 bg-white border-input rounded-md" />
                                     </div>
                                 </FormControl>
                                 <FormMessage />
@@ -160,11 +160,11 @@ export default function RegisterPage() {
                         name="password"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel className="font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Create Password</FormLabel>
+                                <FormLabel className="font-medium text-[11px] uppercase tracking-[0.2em] text-slate-400">Create Password</FormLabel>
                                 <FormControl>
                                     <div className="relative">
                                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                        <Input type="password" placeholder="••••••••" {...field} className="pl-10 h-12 bg-white border-slate-100 rounded-xl" />
+                                        <Input type="password" placeholder="••••••••" {...field} className="pl-10 h-12 bg-white border-input rounded-md" />
                                     </div>
                                 </FormControl>
                                 <FormMessage />
@@ -186,7 +186,7 @@ export default function RegisterPage() {
                                 </FormControl>
                                 <div className="space-y-1 leading-none">
                                     <FormLabel className="text-xs font-medium text-slate-500">
-                                        I agree to the <Link href="/terms" className="text-blue-900 font-bold hover:underline">Terms of Service</Link> and <Link href="/privacy" className="text-blue-900 font-bold hover:underline">Privacy Policy</Link>
+                                        I agree to the <Link href="/terms" className="text-foreground font-bold hover:underline">Terms of Service</Link> and <Link href="/privacy" className="text-foreground font-bold hover:underline">Privacy Policy</Link>
                                     </FormLabel>
                                     <FormMessage />
                                 </div>
@@ -197,7 +197,7 @@ export default function RegisterPage() {
                     <Button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full h-12 bg-blue-900 hover:bg-black text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-900/20"
+                        className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-md transition-all shadow-lg shadow-primary/25"
                     >
                         {isLoading ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
@@ -210,14 +210,14 @@ export default function RegisterPage() {
 
             <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-slate-100" />
+                    <span className="w-full border-t border-input" />
                 </div>
                 <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest text-slate-300">
                     <span className="bg-slate-50 px-4">Instant Signup</span>
                 </div>
             </div>
 
-            <Button variant="outline" className="w-full h-12 border-slate-200 gap-3 font-bold text-slate-600 hover:bg-slate-50 hover:text-blue-900 transition-all rounded-xl">
+            <Button variant="outline" className="w-full h-12 border-slate-200 gap-3 font-bold text-slate-600 hover:bg-slate-50 hover:text-foreground transition-all rounded-md">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="20" height="20">
                     <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z" />
                     <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z" />
@@ -229,7 +229,7 @@ export default function RegisterPage() {
 
             <div className="text-center text-sm font-medium text-slate-500">
                 Already registered?{" "}
-                <Link href="/login" className="text-blue-900 font-bold hover:underline">
+                <Link href="/login" className="text-foreground font-bold hover:underline">
                     Sign In
                 </Link>
             </div>

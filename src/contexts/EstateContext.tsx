@@ -2,13 +2,12 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { fetchEstateConfigAction } from '@/actions/estate';
+import { useUser } from '@/contexts/UserContext';
 
 interface EstateConfig {
   appId: string;
   estateName: string;
-  globalFee: number;
-  currency: string;
-  tier: 'community' | 'pro' | 'enterprise';
+  tier: string;
 }
 
 interface EstateContextType {
@@ -20,56 +19,33 @@ interface EstateContextType {
 const defaultEstate: EstateConfig = {
   appId: '',
   estateName: 'Resident Pass',
-  globalFee: 0,
-  currency: 'NGN',
   tier: 'pro',
 };
 
 const EstateContext = createContext<EstateContextType | undefined>(undefined);
 
 export function EstateProvider({ children }: { children: ReactNode }) {
-  const [estate, setEstate] = useState<EstateConfig>(() => {
-    if (typeof window !== 'undefined') {
-      const storedAppId = localStorage.getItem('app_id');
-      if (storedAppId) {
-        return { ...defaultEstate, appId: storedAppId };
-      }
-    }
-    return defaultEstate;
-  });
+  const { user } = useUser();
+  const [estate, setEstate] = useState<EstateConfig>(defaultEstate);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function initEstate() {
-      const storedAppId = typeof window !== 'undefined' ? localStorage.getItem('app_id') : null;
-
-      if (!storedAppId) {
-        setIsLoading(false);
-        return;
-      }
-
-      console.log("[EstateContext] Initializing with appId:", storedAppId);
-      try {
-        const result = await fetchEstateConfigAction(storedAppId);
-        if (result.success && result.data) {
-          setEstate({
-            appId: result.data.app_id,
-            estateName: result.data.name,
-            globalFee: result.data.global_fee,
-            currency: result.data.currency,
-            tier: 'pro',
-          });
-        } else {
-          console.warn("Estate config not found for:", storedAppId);
-        }
-      } catch (error) {
-        console.error("Failed to initialize estate context", error);
-      } finally {
-        setIsLoading(false);
-      }
+    let active = true;
+    if (!user?.app_id) {
+      setEstate(defaultEstate);
+      setIsLoading(false);
+      return;
     }
-    initEstate();
-  }, []);
+    setIsLoading(true);
+    setEstate({ ...defaultEstate, appId: user.app_id });
+    fetchEstateConfigAction(user.app_id).then(result => {
+      if (active && result.success && result.data) {
+        setEstate({ appId: result.data.app_id, estateName: result.data.name,
+          tier: result.data.tier });
+      }
+    }).finally(() => { if (active) setIsLoading(false); });
+    return () => { active = false; };
+  }, [user?.app_id]);
 
   const updateEstate = (updates: Partial<EstateConfig>) => {
     setEstate(prev => ({ ...prev, ...updates }));

@@ -25,6 +25,5 @@ export function useDashboardActivity(appId: string) {
             return response.data as DashboardActivity[];
         },
         enabled: !!appId,
-        refetchInterval: 30000, // Refresh every 30 seconds
     });
 }

@@ -47,18 +47,18 @@ export function Brand({
 
     const themeClasses = {
         default: {
-            logo: "bg-blue-900",
-            dot: "bg-white",
-            text: "text-blue-900",
+            logo: "bg-primary",
+            dot: "bg-foreground",
+            text: "text-foreground",
         },
         light: {
             logo: "bg-white",
-            dot: "bg-blue-900",
+            dot: "bg-primary",
             text: "text-white",
         },
         dark: {
-            logo: "bg-slate-900",
-            dot: "bg-emerald-400",
+            logo: "bg-[#070B0E]",
+            dot: "bg-primary",
             text: "text-white",
         },
     };

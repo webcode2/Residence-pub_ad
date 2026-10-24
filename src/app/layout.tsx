@@ -15,8 +15,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-    title: "ResidentPass | Modern Estate Management",
-    description: "Secure and efficient resident management for modern estates.",
+    title: "Residence | Estate management",
+    description: "Secure resident, visitor, and gatehouse management for modern estates.",
 };
 
 export default function RootLayout({

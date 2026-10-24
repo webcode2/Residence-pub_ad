@@ -24,7 +24,22 @@ dist-ssr
 *.sw?
 .env
 .env.local
-.env.example
+!.env.example
 .next
 public/import-template.csv
 
+
+.next-ui-check
+
+!src/app/dashboard/logs/
+!src/app/dashboard/logs/page.tsx
+
+.next-production-check
+
+.next-owner-check
+
+.next-onboarding-check
+.next-live
+!public/import-template.csv
+
+*.tsbuildinfo

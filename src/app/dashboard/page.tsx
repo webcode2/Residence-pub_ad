@@ -1,230 +1,39 @@
 "use client";
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Users, UserCheck, DoorOpen, DollarSign, Settings2, Loader2, AlertTriangle } from 'lucide-react';
-import { StatCard } from '@/components/dashboard/StatCard';
-import { BillingChart } from '@/components/dashboard/BillingChart';
-import { SetGlobalFeeModal } from '@/components/dashboard/SetGlobalFeeModal';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { Users, DoorOpen, MessagesSquare, ShieldAlert, ArrowUpRight, RefreshCw, Plus, Bell, ShieldCheck, Activity, Check, CalendarDays } from 'lucide-react';
+import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
-import { useEstate } from '@/contexts/EstateContext';
 import { useUser } from '@/contexts/UserContext';
-import { useDashboardStats } from '@/hooks/use-dashboard-stats';
-import { useDashboardActivity, DashboardActivity } from '@/hooks/use-dashboard-activity';
-import { formatDistanceToNow } from 'date-fns';
+import { getEstateOverview } from '@/actions/conversations';
+
+function localTime(value: string) { return new Date(/Z$|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
 
 export default function Overview() {
-    const [feeModalOpen, setFeeModalOpen] = useState(false);
-    const { estate } = useEstate();
     const { user } = useUser();
-
-    // Using TanStack Query to manage server state
-    const { data: statsData, isLoading: statsLoading, isError: statsError, error: statsErrorObj } = useDashboardStats(estate.appId);
-    const { data: activityData, isLoading: activityLoading } = useDashboardActivity(estate.appId);
-
-    const isCaretaker = user?.roles?.includes('caretaker');
-    const isLoading = statsLoading || activityLoading;
-
+    const overview = useQuery({ queryKey: ['estate-overview', user?.id, user?.app_id], enabled: !!user?.app_id,
+        queryFn: async () => { const result = await getEstateOverview(); if (!result.data) throw new Error(result.error); return result.data; },
+        refetchOnWindowFocus: false, retry: false,
+    });
+    const data = overview.data;
     const stats = [
-        {
-            title: 'Total Residents',
-            value: statsData?.totalResidents?.toLocaleString() || '0',
-            icon: Users,
-            trend: { value: statsData?.residentTrend || 0, isPositive: (statsData?.residentTrend || 0) >= 0 },
-            subtitle: 'Registered units',
-        },
-        {
-            title: 'Unpaid Units',
-            value: statsData?.unpaidUnitsCount?.toLocaleString() || '0',
-            icon: AlertTriangle,
-            trend: { value: 0, isPositive: true },
-            subtitle: 'Outstanding debts',
-        },
-        {
-            title: 'Monthly Revenue',
-            value: `₦${new Intl.NumberFormat('en-NG').format(statsData?.monthlyRevenue || 0)}`,
-            icon: DollarSign,
-            trend: { value: statsData?.revenueTrend || 0, isPositive: (statsData?.revenueTrend || 0) >= 0 },
-            subtitle: 'Collections this month',
-        },
-        {
-            title: 'Active Visitors',
-            value: statsData?.activeVisitors?.toLocaleString() || '0',
-            icon: UserCheck,
-            trend: { value: statsData?.visitorTrend || 0, isPositive: (statsData?.visitorTrend || 0) >= 0 },
-            subtitle: 'Currently on premises',
-        },
+        { label: 'Registered residents', value: data?.residents, icon: Users, note: 'Active resident accounts', href: '/dashboard/residents' },
+        { label: 'Active gate sites', value: data?.active_gates, icon: DoorOpen, note: 'Estate access points', href: '/dashboard/settings/devices' },
+        { label: 'Open conversations', value: data?.open_conversations, icon: MessagesSquare, note: 'Resident–guard threads', href: '/dashboard/conversations' },
+        { label: 'Active emergencies', value: data?.emergencies, icon: ShieldAlert, note: 'Flagged open conversations', href: '/dashboard/conversations', emergency: true },
     ];
-
-    const containerVariants = {
-        hidden: { opacity: 0 },
-        visible: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.1
-            }
-        }
-    };
-
-    const itemVariants = {
-        hidden: { opacity: 0, y: 20 },
-        visible: {
-            opacity: 1,
-            y: 0,
-            transition: { duration: 0.4 }
-        }
-    };
-
-    if (statsError) {
-        return (
-            <div className="h-[60vh] flex flex-col items-center justify-center text-center p-6">
-                <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
-                    <Settings2 className="h-8 w-8 text-destructive" />
-                </div>
-                <h2 className="text-xl font-display font-bold text-foreground">Failed to load dashboard</h2>
-                <p className="text-muted-foreground mt-2 max-w-md">
-                    {(statsErrorObj as any)?.message || "There was an error connecting to the server. Please try again later."}
-                </p>
-                <Button variant="outline" className="mt-6" onClick={() => window.location.reload()}>
-                    Retry Connection
-                </Button>
-            </div>
-        );
-    }
-
-    return (
-        <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-            className="space-y-6"
-        >
-            {/* Header */}
-            <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl lg:text-3xl font-display font-bold text-foreground">
-                        Dashboard Overview
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Welcome back, {user?.full_name || 'Resident'}! Here's what's happening today.
-                    </p>
-                </div>
-                {isCaretaker && (
-                    <Button variant="hero" onClick={() => setFeeModalOpen(true)}>
-                        <Settings2 className="h-4 w-4 mr-2" />
-                        Set Global Fee
-                    </Button>
-                )}
-            </motion.div>
-
-            {/* Stats Grid */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-                {stats.map((stat) => (
-                    <StatCard key={stat.title} {...stat} loading={statsLoading} />
-                ))}
-            </motion.div>
-
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <motion.div variants={itemVariants}>
-                    <BillingChart data={statsData?.billingDistribution} loading={statsLoading} />
-                </motion.div>
-
-                {/* Quick Actions Card */}
-                <motion.div
-                    variants={itemVariants}
-                    className="stat-card"
-                >
-                    <h3 className="text-lg font-display font-semibold text-foreground mb-4">
-                        Quick Actions
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        {[
-                            { label: 'Generate Token', action: 'New resident registration token' },
-                            { label: 'Send Reminders', action: 'Billing payment reminders' },
-                            { label: 'View Reports', action: 'Security incident reports' },
-                            { label: 'Broadcast', action: 'Send estate-wide notification' },
-                        ].map((item) => (
-                            <button
-                                key={item.label}
-                                className="p-4 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/60 transition-colors text-left group"
-                            >
-                                <p className="font-semibold text-foreground group-hover:text-accent transition-colors">
-                                    {item.label}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-1">{item.action}</p>
-                            </button>
-                        ))}
-                    </div>
-                </motion.div>
-            </div>
-
-            {/* Recent Activity */}
-            <motion.div
-                variants={itemVariants}
-                className="stat-card"
-            >
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-display font-semibold text-foreground">
-                        Recent Activity
-                    </h3>
-                    <Button variant="ghost" size="sm" disabled={activityLoading}>
-                        {activityLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "View All"}
-                    </Button>
-                </div>
-                {activityLoading ? (
-                    <div className="space-y-4">
-                        {[1, 2, 3, 4].map((i) => (
-                            <div key={i} className="flex items-center gap-4">
-                                <div className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-                                <div className="flex-1 space-y-2">
-                                    <div className="h-4 w-1/3 bg-secondary animate-pulse rounded" />
-                                    <div className="h-3 w-2/3 bg-secondary animate-pulse rounded" />
-                                </div>
-                                <div className="h-3 w-16 bg-secondary animate-pulse rounded" />
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {Array.isArray(activityData) && activityData.length > 0 ? (
-                            activityData.map((activity: DashboardActivity, index: number) => (
-                                <div
-                                    key={index}
-                                    className="flex items-start gap-4 p-3 rounded-lg hover:bg-secondary/50 transition-colors"
-                                >
-                                    <div className={`w-2 h-2 rounded-full mt-2 ${activity.type === 'entry' ? 'bg-accent' :
-                                        activity.type === 'visitor' ? 'bg-orange-500' :
-                                            activity.type === 'payment' ? 'bg-success' :
-                                                activity.type === 'sos' ? 'bg-destructive' :
-                                                    'bg-primary'
-                                        }`} />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-foreground">
-                                            {activity.action.includes(user?.full_name || "") ? (
-                                                <span className="flex items-center gap-2">
-                                                    {activity.action.replace(user?.full_name || "", "")}
-                                                    <span className="text-secondary font-black tracking-widest uppercase text-[10px]">YOU</span>
-                                                </span>
-                                            ) : activity.action}
-                                        </p>
-                                        <p className="text-sm text-muted-foreground truncate">{activity.details}</p>
-                                    </div>
-                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                        {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-                                    </span>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="py-8 text-center text-muted-foreground">
-                                No recent activity found.
-                            </div>
-                        )}
-                    </div>
-                )}
-            </motion.div>
-
-            <SetGlobalFeeModal open={feeModalOpen} onClose={() => setFeeModalOpen(false)} />
-        </motion.div>
-    );
+    return <div className="space-y-7">
+        <div className="flex flex-wrap justify-between items-end gap-5"><div><p className="text-[10px] uppercase tracking-[.17em] text-muted-foreground mb-2">YOUR COMMUNITY, AT A GLANCE</p><h1 className="text-3xl sm:text-[34px] font-medium tracking-[-.045em]">A clearer view of your estate.</h1><p className="text-xs text-muted-foreground mt-3">Welcome back{user?.full_name ? `, ${user.full_name.split(' ')[0]}` : ''}. Here’s where things stand.</p></div><div className="flex items-center gap-2"><Button variant="outline" onClick={() => overview.refetch()} disabled={overview.isFetching} className="bg-card text-xs h-10"><RefreshCw className={overview.isFetching ? 'animate-spin' : ''} />Refresh</Button><Button asChild className="text-xs h-10"><Link href="/dashboard/residents"><Plus />Manage residents</Link></Button></div></div>
+        {overview.error && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-lg border border-amber-200 bg-amber-50"><p className="text-xs text-amber-900">{overview.error.message} Your estate tools are still available below.</p><Button variant="outline" size="sm" onClick={() => overview.refetch()}>Try again</Button></div>}
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">{stats.map(stat => <Link href={stat.href} key={stat.label} className="group rounded-xl bg-card border border-border p-5 hover:border-[#b6c8a7] transition-colors"><div className="flex justify-between items-start gap-2"><span className="text-[11px] text-muted-foreground">{stat.label}</span><stat.icon size={17} strokeWidth={1.6} className={stat.emergency && (stat.value ?? 0) > 0 ? 'text-destructive' : 'text-[#718368]'} /></div>{overview.isLoading ? <div className="h-10 w-20 bg-muted animate-pulse mt-5 rounded" /> : <p className="text-[34px] tracking-[-.055em] font-medium mt-4 tabular-nums">{stat.value?.toLocaleString() ?? '—'}</p>}<div className="flex items-center justify-between mt-3"><p className="text-[10px] text-muted-foreground">{stat.note}</p><ArrowUpRight size={13} className="text-muted-foreground group-hover:text-primary" /></div></Link>)}</div>
+        <div className="grid xl:grid-cols-[1.65fr_1fr] gap-5">
+            <section className="bg-card border border-border rounded-xl p-5 sm:p-6 min-w-0"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-medium text-sm">The rhythm at your gates</h2><p className="text-[11px] text-muted-foreground mt-1.5">Recorded access events over the last seven UTC days</p></div><span className="flex items-center gap-1.5 text-[10px] rounded-md border border-border px-2.5 py-1.5 text-muted-foreground"><CalendarDays size={12} />Last 7 days</span></div><div className="flex items-center gap-5 mt-6 text-[10px] text-muted-foreground"><span className="flex gap-2 items-center"><i className="h-2 w-2 rounded-sm bg-[#607e52]" />Authorized</span><span className="flex gap-2 items-center"><i className="h-2 w-2 rounded-sm bg-[#d6b59c]" />Denied</span></div><div className="h-[240px] mt-5" role="img" aria-label={data ? `Seven-day access activity: ${data.gate_activity.reduce((sum, day) => sum + day.authorized, 0)} authorized, ${data.gate_activity.reduce((sum, day) => sum + day.denied, 0)} denied.` : 'Access activity unavailable'}>{overview.isLoading ? <div className="h-full rounded-md bg-muted animate-pulse" /> : data ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.gate_activity} barGap={3} margin={{ top: 15, right: 0, left: -25, bottom: 0 }}><CartesianGrid vertical={false} stroke="#edf0e8" /><XAxis dataKey="date" tickFormatter={value => new Date(`${value}T12:00:00Z`).toLocaleDateString('en', { weekday: 'short' })} tick={{ fontSize: 10, fill: '#92998c' }} axisLine={false} tickLine={false} dy={10} /><YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#92998c' }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ border: '1px solid #e2e6da', borderRadius: 8, fontSize: 11 }} cursor={{ fill: '#f4f6f0' }} /><Bar dataKey="authorized" name="Authorized" fill="#607e52" radius={[3, 3, 0, 0]} maxBarSize={22} /><Bar dataKey="denied" name="Denied" fill="#d6b59c" radius={[3, 3, 0, 0]} maxBarSize={22} /></BarChart></ResponsiveContainer> : <div className="h-full grid place-items-center text-xs text-muted-foreground">Access activity will appear when the estate data is available.</div>}</div></section>
+            <section className="bg-[#eaf0e2] border border-[#d8e2cd] rounded-xl p-6 flex flex-col"><span className="text-[9px] tracking-[.15em] text-[#748466]">A WELL-RUN EVERYDAY</span><h2 className="text-2xl font-medium tracking-tight mt-3">The details,<br /><span className="serif-word">within reach.</span></h2><p className="text-[11px] leading-7 text-[#75816a] mt-3">A few direct routes to the things that keep your estate moving.</p><div className="mt-5 space-y-2">{[{ icon: MessagesSquare, label: 'Review conversations', sub: 'Follow the full resident–guard history', href: '/dashboard/conversations' }, { icon: Bell, label: 'Share an announcement', sub: 'Keep your community in the loop', href: '/dashboard/notifications' }, { icon: ShieldCheck, label: 'Review incident reports', sub: 'Give issues the attention they need', href: '/dashboard/reports' }].map(action => <Link key={action.href} href={action.href} className="flex items-center gap-3 bg-white/60 rounded-lg border border-white/80 px-3 py-3 hover:bg-white transition-colors"><action.icon size={17} className="text-[#6d845d] shrink-0" /><div><p className="text-[11px] font-medium">{action.label}</p><p className="text-[9px] text-[#7e8974] mt-1">{action.sub}</p></div><ArrowUpRight size={14} className="ml-auto text-[#849475] shrink-0" /></Link>)}</div></section>
+        </div>
+        <div className="grid xl:grid-cols-[1.3fr_1fr] gap-5">
+            <section className="bg-card border border-border rounded-xl overflow-hidden"><div className="p-5 sm:p-6 flex items-center justify-between gap-3"><div><h2 className="text-sm font-medium">Conversations, in context</h2><p className="text-[10px] text-muted-foreground mt-1.5">The latest resident–guard threads</p></div><Link href="/dashboard/conversations" className="inline-flex items-center gap-2 text-[10px] font-medium text-primary">View all<ArrowUpRight size={13} /></Link></div>{overview.isLoading ? <div className="mx-6 mb-6 h-36 bg-muted animate-pulse rounded" /> : data?.conversations.length ? <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-[#f7f8f3] border-y border-border text-[9px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-6 py-3 font-medium">Resident / unit</th><th className="px-3 py-3 font-medium">Conversation</th><th className="px-6 py-3 font-medium">Status</th></tr></thead><tbody>{data.conversations.map(thread => <tr key={thread.id} className="border-b last:border-b-0 border-border"><td className="px-6 py-4"><p className="font-medium whitespace-nowrap">{thread.resident_name || 'Resident'}</p><p className="text-[10px] text-muted-foreground mt-1">{thread.unit_address || 'Unit not specified'}</p></td><td className="px-3 py-4"><Link href={`/dashboard/conversations?thread=${thread.id}`} className="hover:text-primary text-[11px] line-clamp-1 max-w-[230px]">{thread.last_message_text || thread.subject || 'View conversation'}</Link><p className="text-[9px] text-muted-foreground mt-1">{thread.gate_site_name || 'Gatehouse'}</p></td><td className="px-6 py-4"><span className={`text-[9px] rounded-full px-2 py-1 whitespace-nowrap ${thread.has_active_emergency ? 'bg-red-50 text-red-700' : thread.status === 'open' ? 'bg-[#edf2e6] text-[#5a7347]' : 'bg-muted text-muted-foreground'}`}>{thread.has_active_emergency ? 'Emergency' : thread.status}</span></td></tr>)}</tbody></table></div> : <div className="px-6 py-12 text-center"><MessagesSquare size={25} strokeWidth={1.3} className="mx-auto text-muted-foreground mb-3" /><p className="text-xs text-muted-foreground">{data ? 'No conversations recorded yet.' : 'Conversation data is currently unavailable.'}</p><Link href="/dashboard/conversations" className="inline-block text-[11px] text-primary mt-3">Open conversation logs</Link></div>}</section>
+            <section className="bg-card border border-border rounded-xl p-5 sm:p-6"><div className="flex justify-between items-center mb-6"><h2 className="text-sm font-medium">Around your estate</h2><Link href="/dashboard/logs" aria-label="View all access activity" className="text-muted-foreground hover:text-primary"><ArrowUpRight size={16} /></Link></div>{overview.isLoading ? <div className="h-36 rounded bg-muted animate-pulse" /> : data?.recent_activity.length ? <ol className="space-y-5">{data.recent_activity.map(item => <li key={item.id} className="flex items-start gap-3"><span className={`h-7 w-7 shrink-0 rounded-full grid place-items-center ${item.status === 'authorized' ? 'bg-[#eef3e7] text-[#748f5e]' : 'bg-amber-50 text-amber-700'}`}>{item.status === 'authorized' ? <Check size={13} /> : <ShieldAlert size={13} />}</span><div className="min-w-0 flex-1"><div className="flex justify-between gap-3"><p className="text-[11px] font-medium truncate capitalize">{item.title}</p><time className="text-[9px] text-muted-foreground shrink-0">{localTime(item.created_at)}</time></div><p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{item.details}</p></div></li>)}</ol> : <div className="py-12 text-center"><Activity size={25} strokeWidth={1.3} className="mx-auto text-muted-foreground mb-3" /><p className="text-xs text-muted-foreground">{data ? 'Gate activity will appear here as events are recorded.' : 'Recent activity is currently unavailable.'}</p></div>}<div className="flex items-center gap-2 pt-5 mt-6 border-t border-border text-[9px] text-muted-foreground"><ShieldCheck size={12} />{data ? `Snapshot updated at ${localTime(data.updated_at)} · Refresh for the latest` : 'Only your estate’s records appear here'}</div></section>
+        </div>
+    </div>;
 }

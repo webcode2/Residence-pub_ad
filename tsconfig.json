@@ -29,12 +29,18 @@
     }
   },
   "include": [
-    "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next-live/types/**/*.ts",
+    ".next/types/**/*.ts",
+    "next-env.d.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".next-ui-check",
+    ".next-production-check",
+    ".next-owner-check",
+    ".next-trial-check",
+    ".next-onboarding-check"
   ]
 }

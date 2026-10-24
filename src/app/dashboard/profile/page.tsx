@@ -221,7 +221,7 @@ export default function ProfilePage() {
                                 <Button
                                     type="submit"
                                     disabled={isLoading}
-                                    className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white min-w-[140px]"
+                                    className="rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground min-w-[140px]"
                                 >
                                     {isLoading ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />

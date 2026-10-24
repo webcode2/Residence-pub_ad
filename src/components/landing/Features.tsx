@@ -9,7 +9,6 @@ import {
   Smartphone,
   Lock,
   Fingerprint,
-  FileText
 } from 'lucide-react';
 
 const features = [
@@ -31,7 +30,7 @@ const features = [
   {
     icon: Bell,
     title: 'Instant Notifications',
-    description: 'Push alerts for visitor arrivals, security events, and billing reminders.',
+    description: 'Push alerts for visitor arrivals, security events, and estate announcements.',
   },
   {
     icon: Smartphone,
@@ -48,11 +47,7 @@ const features = [
     title: 'IoT Integration',
     description: 'Connect with smart gates, QR scanners, and biometric devices via our API.',
   },
-  {
-    icon: FileText,
-    title: 'Automated Billing',
-    description: 'Generate invoices, track payments, and send reminders automatically.',
-  },
+
 ];
 
 export function Features() {
