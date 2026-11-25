@@ -1,5 +1,5 @@
 "use server";
-import {headers} from 'next/headers';
+import {appOrigin} from '@/lib/app-url';
 import api from '@/lib/api';
 import {caretakerHeaders} from '@/lib/caretaker';
 import {OwnerPlan} from '@/actions/owner';
@@ -10,8 +10,8 @@ export async function getRenewalPlans(){
 export async function startEstateCheckout(tier:string,billingMonths:number){
  if(!['starter','standard','premium','enterprise'].includes(tier)||![1,6,12].includes(billingMonths))return {error:'Select a plan and payment period.'};
  try{
-  const origin=(await headers()).get('origin');
-  if(!origin||!/^https?:\/\//.test(origin))return {error:'Please reload this page before starting checkout.'};
+  const origin=await appOrigin();
+  if(!origin)return {error:'Please reload this page before starting checkout.'};
   const response=await api.post('subscriptions/checkout',{tier,billing_months:billingMonths,success_url:new URL('/dashboard/subscription?checkout=success',origin).href,cancel_url:new URL('/dashboard/subscription?checkout=cancelled',origin).href},{headers:await caretakerHeaders(),timeout:20000});
   if(response.data.is_simulated)return {error:'Online payments are not configured. Contact the platform owner to arrange renewal.'};
   return {data:response.data as {session_id:string;checkout_url:string;is_sandbox:boolean;returns_to_app:boolean}};

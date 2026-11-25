@@ -70,7 +70,7 @@ export async function getConversation(id: string) {
 
 export interface EstateOverview {
     residents: number; active_gates: number; open_conversations: number; emergencies: number;
-    gate_activity: { date: string; authorized: number; denied: number }[];
+    gate_activity: { date: string; authorized: number; denied: number; generated: number }[];
     recent_activity: { id: string; title: string; details: string; status: string; created_at: string }[];
     conversations: Conversation[]; updated_at: string;
 }

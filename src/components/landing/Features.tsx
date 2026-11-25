@@ -20,7 +20,7 @@ const features = [
   {
     icon: Users,
     title: 'Resident Directory',
-    description: 'Complete database of landlords, tenants, and occupants with hierarchical management.',
+    description: 'Complete database of hosts / property owners, tenants, and occupants with hierarchical management.',
   },
   {
     icon: BarChart3,

@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "residence-admin",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-24",
+  "workers_dev": true,
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      // Required by OpenNext for internal request handling / caching.
+      // The service name must match this Worker's name.
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "residence-admin"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "residence.elastrocloud.com/*",
+      "zone_name": "elastrocloud.com"
+    }
+  ],
+  "vars": {
+    "NEXT_PUBLIC_BACKEND_API_URL": "https://residence-api-136222598323.us-east5.run.app/api/v1/",
+    "APP_URL": "https://residence.elastrocloud.com",
+    "BACKEND_INTERNAL_URL": "https://residence-api-136222598323.us-east5.run.app"
+  }
+}

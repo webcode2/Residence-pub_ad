@@ -9,7 +9,12 @@ export function Providers({ children }: { children: ReactNode }) {
     const [queryClient] = useState(() => new QueryClient({
         defaultOptions: {
             queries: {
-                staleTime: 60 * 1000,
+                // Keep dashboard data fresh for 30s so page navigation does not
+                // immediately refetch. Explicit Refresh buttons still force a fetch.
+                staleTime: 30 * 1000,
+                gcTime: 5 * 60 * 1000,
+                refetchOnWindowFocus: false,
+                refetchOnReconnect: false,
             },
         },
     }));

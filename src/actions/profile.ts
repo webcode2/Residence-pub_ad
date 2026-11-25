@@ -3,49 +3,53 @@
 import api from "@/lib/api";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { getSession, login } from "@/lib/session";
+import { login } from "@/lib/session";
+import { caretakerHeaders } from "@/lib/caretaker";
 
-const ProfileUpdateSchema = z.object({
-    full_name: z.string().min(3).optional(),
-    email: z.string().email().optional(),
-    password: z.string().min(8).optional(),
+const DetailsSchema = z.object({
+    full_name: z.string().trim().min(1).max(255),
+    email: z.string().trim().email(),
+    current_password: z.string().max(128).optional(),
+});
+const PasswordSchema = z.object({
+    current_password: z.string().min(1).max(128),
+    new_password: z.string().min(12).max(72),
 });
 
-export async function updateProfileAction(userId: string, appId: string, data: z.infer<typeof ProfileUpdateSchema>) {
-    console.log(`[updateProfileAction] Start - UserID: ${userId}, AppID: ${appId}`);
+function failure(error: unknown, fallback: string): string {
+    const response = (error as { response?: { status?: number; data?: { detail?: unknown } } }).response;
+    if (response?.status === 401) return "Your session has expired. Please sign in again.";
+    return typeof response?.data?.detail === "string" ? response.data.detail : fallback;
+}
+
+// Both endpoints revoke the presented token and return a fresh one, so the session must be rewritten.
+async function persist(data: { user: unknown; token: { access_token: string } }) {
+    await login(data.user, data.token.access_token);
+    revalidatePath("/dashboard");
+}
+
+export async function updateProfileAction(values: z.infer<typeof DetailsSchema>) {
+    const parsed = DetailsSchema.safeParse(values);
+    if (!parsed.success) return { error: "Enter your name and a valid email address." };
     try {
-        const session = await getSession();
-        if (!session) {
-            console.error("[updateProfileAction] No session found");
-            return { error: "Session expired. Please log in again." };
-        }
+        const { current_password, ...details } = parsed.data;
+        const response = await api.patch("users/me/profile", { ...details, ...(current_password ? { current_password } : {}) },
+            { headers: await caretakerHeaders(), timeout: 15000 });
+        await persist(response.data);
+        return { success: true };
+    } catch (error) {
+        return { error: failure(error, "Failed to update your profile.") };
+    }
+}
 
-        if (!session.token) {
-            console.error("[updateProfileAction] No token found in session", session);
-            return { error: "Authentication token missing. Please log out and log back in." };
-        }
-
-        const headers: any = {
-            'X-App-Id': appId,
-            'Authorization': `Bearer ${session.token}`
-        };
-
-        console.log(`[updateProfileAction] Headers:`, { ...headers, Authorization: 'Bearer [REDACTED]' });
-
-        // Force use of a fresh axios instance or just use api instance but ensure headers are clean
-        const response = await api.patch(`iam/users/${userId}`, data, { headers });
-        console.log(`[updateProfileAction] Success:`, response.data);
-
-        // Update the session cookie with the new user details
-        // This is CRITICAL so refreshUser() sees the new data
-        await login(response.data, session.token);
-
-        revalidatePath('/dashboard');
-        return { success: true, data: response.data };
-    } catch (error: any) {
-        console.error("[updateProfileAction] Error:", error.response?.data || error.message);
-        return {
-            error: error.response?.data?.detail || "Failed to update profile"
-        };
+export async function changePasswordAction(values: z.infer<typeof PasswordSchema>) {
+    const parsed = PasswordSchema.safeParse(values);
+    if (!parsed.success) return { error: "Use a new password of 12 to 72 characters." };
+    try {
+        const response = await api.post("auth/change-password", parsed.data, { headers: await caretakerHeaders(), timeout: 15000 });
+        await persist(response.data);
+        return { success: true };
+    } catch (error) {
+        return { error: failure(error, "Failed to change your password.") };
     }
 }

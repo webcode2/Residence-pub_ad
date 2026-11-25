@@ -7,6 +7,7 @@ import {
     ChevronDown,
     ChevronUp,
     UserX,
+    UserCheck,
     KeyRound,
     Users,
     MoreHorizontal,
@@ -28,10 +29,10 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import Papa from 'papaparse';
 import {uploadLandlordFile} from '@/actions/directory';
-import {LandlordOnboardingTracker} from '@/components/LandlordOnboardingTracker';
+import {LandlordImportStatus,LandlordOnboardingTracker} from '@/components/LandlordOnboardingTracker';
 
 
-import { useResidents, useImportLandlords, useRevokeUser, useUpdateUser, useDeleteUser } from '@/hooks/use-residents';
+import { useResidents, useCreateLandlord, useImportLandlords, useRevokeUser, useRestoreUser, useUpdateUser, useDeleteUser } from '@/hooks/use-residents';
 import { useUser } from '@/contexts/UserContext';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -63,9 +64,10 @@ export default function Residents() {
     const [search, setSearch] = useState('');
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
-    const [revokeModal, setRevokeModal] = useState<string | null>(null);
+    const [revokeModal, setRevokeModal] = useState<{id: string; name: string; action: 'revoke'|'restore'} | null>(null);
     const [offboardModal, setOffboardModal] = useState<string | null>(null);
     const [importModal, setImportModal] = useState(false);
+    const [importTab, setImportTab] = useState<'upload' | 'tracker'>('upload');
     const [manualModal, setManualModal] = useState(false);
     const [editModal, setEditModal] = useState<Resident | null>(null);
     const [deleteModal, setDeleteModal] = useState<Resident | null>(null);
@@ -83,8 +85,10 @@ export default function Residents() {
 
     const appId = currentUser?.app_id || '';
     const { data: residents = [], isLoading, isError, refetch } = useResidents(appId);
+    const createLandlordMutation = useCreateLandlord(appId);
     const importMutation = useImportLandlords(appId);
     const revokeMutation = useRevokeUser(appId);
+    const restoreMutation = useRestoreUser(appId);
     const updateMutation = useUpdateUser(appId);
     const deleteMutation = useDeleteUser(appId);
 
@@ -102,18 +106,23 @@ export default function Residents() {
     const handleRevoke = async () => {
         if (!revokeModal) return;
         try {
-            await revokeMutation.mutateAsync(revokeModal);
-            toast.success("Access status updated successfully");
+            if (revokeModal.action === 'restore') {
+                await restoreMutation.mutateAsync(revokeModal.id);
+                toast.success("Account restored successfully");
+            } else {
+                await revokeMutation.mutateAsync(revokeModal.id);
+                toast.success("Account suspended successfully");
+            }
             setRevokeModal(null);
         } catch (error: any) {
-            toast.error(error.response?.data?.detail || "Failed to update access status");
+            toast.error(error.message || "Failed to update account status");
         }
     };
 
     const handleExport = () => {
         const csvData = residents.map((r: any) => ({
             Unit: r.house_number || 'N/A',
-            Landlord: r.full_name,
+            'Host / Property Owner': r.full_name,
             Email: r.email,
             Status: r.status,
             Type: r.type,
@@ -140,9 +149,12 @@ export default function Residents() {
         try {
             const form=new FormData();form.set('file',file);
             const results=await uploadLandlordFile(form);
-            const queued=results.filter((r:{status:string})=>r.status==='queued').length;
-            toast.success(`${queued} landlord jobs queued. Follow progress in the onboarding tracker.`);
-            setTrackerVersion(v=>v+1);setImportModal(false);
+            if(!Array.isArray(results)){setImportError(results.error);return;}
+            const importing=results.filter((r:{status:string})=>r.status!=='skipped').length;
+            const skipped=results.length-importing;
+            toast.success(importing?`Importing ${importing} ${importing===1?'host / property owner':'hosts / property owners'}${skipped?`; ${skipped} already handled`:''}.`:'Nothing new to import: every row was already handled.');
+            setTrackerVersion(v=>v+1);
+            setImportTab('tracker');
         } catch(error) {setImportError(error instanceof Error?error.message:'Import failed. Check the file and retry.');}
         finally {setIsImporting(false);event.target.value='';}
     };
@@ -151,21 +163,17 @@ export default function Residents() {
         e.preventDefault();
         setIsImporting(true);
         try {
-            const results = await importMutation.mutateAsync([manualFormData]);
-            const result = results[0];
-
-            if (result.status === 'queued') {
-                toast.success("Landlord onboarding queued. Track the welcome email below.");
-                setManualModal(false);
-                setManualFormData({ name: '', phone: '', email: '', house_number: '', street_name: '' });
-                setTrackerVersion(v=>v+1);
-            } else if (result.status === 'skipped') {
-                toast.warning(`Skipped: ${result.message || "User already exists"}`);
+            const result: any = await createLandlordMutation.mutateAsync(manualFormData);
+            if (result?.email_warning || result?.email_status === 'retrying' || result?.email_status === 'failed') {
+                toast.warning(result?.email_warning || "Host / Property Owner added, but the welcome email was not sent.");
             } else {
-                toast.error(`Error: ${result.message || "Failed to add landlord"}`);
+                toast.success(result?.message || "Host / Property Owner added successfully");
             }
+            setManualModal(false);
+            setManualFormData({ name: '', phone: '', email: '', house_number: '', street_name: '' });
+            refetch();
         } catch (error: any) {
-            toast.error(error.response?.data?.detail || "Failed to add landlord");
+            toast.error(error.message || "Failed to add host / property owner");
         } finally {
             setIsImporting(false);
         }
@@ -185,10 +193,10 @@ export default function Residents() {
                     street_name: editModal.street_name
                 }
             });
-            toast.success("Landlord updated successfully");
+            toast.success("Host / Property Owner updated successfully");
             setEditModal(null);
         } catch (error: any) {
-            toast.error(error.response?.data?.detail || "Failed to update landlord");
+            toast.error(error.message || "Failed to update host / property owner");
         } finally {
             setIsImporting(false);
         }
@@ -197,11 +205,15 @@ export default function Residents() {
     const handleDelete = async () => {
         if (!deleteModal) return;
         try {
-            await deleteMutation.mutateAsync(deleteModal.id);
-            toast.success("Landlord deleted successfully");
+            const result = await deleteMutation.mutateAsync(deleteModal.id);
+            if (result?.status === 'revoked') {
+                toast.info(result.message || "Account suspended to preserve related records.");
+            } else {
+                toast.success(result?.message || "Account deleted successfully");
+            }
             setDeleteModal(null);
         } catch (error: any) {
-            toast.error(error.response?.data?.detail || "Failed to delete landlord");
+            toast.error(error.message || "Failed to delete account");
         }
     };
 
@@ -246,7 +258,7 @@ export default function Residents() {
                         Resident Directory
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        Manage landlords and their occupants
+                        Manage hosts / property owners and their occupants
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -257,7 +269,7 @@ export default function Residents() {
                     </Button>
                     <Button variant="hero" onClick={() => setManualModal(true)}>
                         <UserPlus className="h-4 w-4 mr-2" />
-                        Add Landlord
+                        Add Host / Property Owner
                     </Button>
                     <Button variant="outline" onClick={() => setImportModal(true)}>
                         <Upload className="h-4 w-4 mr-2" />
@@ -265,6 +277,8 @@ export default function Residents() {
                     </Button>
                 </div>
             </div>
+
+            <LandlordImportStatus version={trackerVersion} onFinished={refetch} onOpen={()=>{setImportTab('tracker');setImportModal(true);}} />
 
             {/* Search */}
             <div className="relative max-w-md">
@@ -278,7 +292,6 @@ export default function Residents() {
                 />
             </div>
 
-            <LandlordOnboardingTracker version={trackerVersion}/>
             {/* Table */}
             <div className="bg-card rounded-xl border border-border overflow-hidden relative">
                 {isLoading && (
@@ -294,7 +307,7 @@ export default function Residents() {
                         <thead>
                             <tr className="border-b border-border bg-secondary/30">
                                 <th className="text-left p-4 font-semibold text-foreground text-sm">Unit</th>
-                                <th className="text-left p-4 font-semibold text-foreground text-sm">Landlord</th>
+                                <th className="text-left p-4 font-semibold text-foreground text-sm">Host / Property Owner</th>
                                 <th className="text-left p-4 font-semibold text-foreground text-sm hidden md:table-cell">Token</th>
                                 <th className="text-left p-4 font-semibold text-foreground text-sm hidden lg:table-cell">Type</th>
                                 <th className="text-left p-4 font-semibold text-foreground text-sm">Status</th>
@@ -405,9 +418,18 @@ export default function Residents() {
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
+                                                    onClick={() => setRevokeModal({id: resident.id, name: resident.full_name, action: resident.status === 'suspended' ? 'restore' : 'revoke'})}
+                                                    className={cn(resident.status === 'suspended' ? "text-success hover:text-success hover:bg-success/10" : "text-warning hover:text-warning hover:bg-warning/10")}
+                                                    title={resident.status === 'suspended' ? "Restore Account" : "Suspend Account"}
+                                                >
+                                                    {resident.status === 'suspended' ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
                                                     onClick={() => setDeleteModal(resident)}
                                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    title="Delete Resident"
+                                                    title="Delete Account"
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
@@ -430,7 +452,7 @@ export default function Residents() {
                                                                     <Users className="h-3 w-3" />
                                                                     Registered Occupants ({resident.occupants.length})
                                                                 </h4>
-                                                                <p className="text-xs text-muted-foreground">Invited by this landlord</p>
+                                                                <p className="text-xs text-muted-foreground">Invited by this host / property owner</p>
                                                             </div>
                                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4 pb-4">
                                                                 {resident.occupants.map((occ) => (
@@ -452,8 +474,14 @@ export default function Residents() {
                                                                             </div>
                                                                         </div>
                                                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setRevokeModal(occ.id)}>
-                                                                                <UserX className="h-3.5 w-3.5" />
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className={cn("h-8 w-8", occ.is_revoked ? "text-success hover:text-success" : "text-destructive hover:text-destructive")}
+                                                                                onClick={() => setRevokeModal({id: occ.id, name: occ.full_name, action: occ.is_revoked ? 'restore' : 'revoke'})}
+                                                                                title={occ.is_revoked ? "Restore account" : "Suspend account"}
+                                                                            >
+                                                                                {occ.is_revoked ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
                                                                             </Button>
                                                                         </div>
                                                                     </div>
@@ -506,20 +534,22 @@ export default function Residents() {
                             className="relative w-full max-w-sm bg-card rounded-2xl shadow-2xl border border-border p-6 z-10"
                         >
                             <div className="flex items-center gap-3 mb-4">
-                                <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
-                                    <AlertTriangle className="h-6 w-6 text-destructive" />
+                                <div className={cn("w-12 h-12 rounded-full flex items-center justify-center", revokeModal.action === 'restore' ? "bg-success/10" : "bg-destructive/10")}>
+                                    <AlertTriangle className={cn("h-6 w-6", revokeModal.action === 'restore' ? "text-success" : "text-destructive")} />
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-display font-bold text-foreground">
-                                        Revoke Access?
+                                        {revokeModal.action === 'restore' ? 'Restore Account?' : 'Suspend Account?'}
                                     </h3>
                                     <p className="text-sm text-muted-foreground">
-                                        This action cannot be undone
+                                        {revokeModal.name}
                                     </p>
                                 </div>
                             </div>
                             <p className="text-sm text-muted-foreground mb-6">
-                                This will immediately suspend all access tokens for this unit. The resident will no longer be able to enter the estate.
+                                {revokeModal.action === 'restore'
+                                    ? 'This will restore account access. The user will be able to sign in again.'
+                                    : 'This will immediately suspend account access. The user will no longer be able to sign in or enter the estate.'}
                             </p>
                             <div className="flex gap-3">
                                 <Button
@@ -530,15 +560,15 @@ export default function Residents() {
                                     Cancel
                                 </Button>
                                 <Button
-                                    variant="destructive"
+                                    variant={revokeModal.action === 'restore' ? 'default' : 'destructive'}
                                     className="flex-1"
                                     onClick={handleRevoke}
-                                    disabled={revokeMutation.isPending}
+                                    disabled={revokeMutation.isPending || restoreMutation.isPending}
                                 >
-                                    {revokeMutation.isPending ? (
+                                    {(revokeMutation.isPending || restoreMutation.isPending) ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                        "Revoke Access"
+                                        revokeModal.action === 'restore' ? 'Restore Account' : 'Suspend Account'
                                     )}
                                 </Button>
                             </div>
@@ -615,9 +645,9 @@ export default function Residents() {
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative w-full max-w-lg bg-card rounded-2xl shadow-2xl border border-border p-6 z-10"
+                            className="relative w-full max-w-3xl bg-card rounded-2xl shadow-2xl border border-border p-6 z-10 max-h-[90vh] overflow-y-auto"
                         >
-                            <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                                         <Upload className="h-5 w-5 text-primary" />
@@ -627,7 +657,7 @@ export default function Residents() {
                                             Bulk Import Residents
                                         </h3>
                                         <p className="text-sm text-muted-foreground">
-                                            Upload a CSV or Excel file to onboard landlords
+                                            Upload a CSV or Excel file to batch onboard hosts / property owners
                                         </p>
                                     </div>
                                 </div>
@@ -639,65 +669,99 @@ export default function Residents() {
                                 </button>
                             </div>
 
-                            <div className="space-y-6">
-                                <div className="p-8 border-2 border-dashed border-border rounded-xl bg-secondary/30 text-center">
-                                    <input
-                                        type="file"
-                                        id="csv-upload"
-                                        className="hidden"
-                                        accept=".csv,.xlsx,.xls"
-                                        onChange={handleFileUpload}
-                                        disabled={isImporting}
-                                    />
-                                    <label
-                                        htmlFor="csv-upload"
-                                        className={cn(
-                                            "cursor-pointer flex flex-col items-center gap-2",
-                                            isImporting && "opacity-50 cursor-not-allowed"
-                                        )}
-                                    >
-                                        <div className="w-12 h-12 rounded-full bg-primary/5 flex items-center justify-center mb-2">
-                                            <FileText className="h-6 w-6 text-primary" />
-                                        </div>
-                                        <p className="font-semibold text-foreground">
-                                            {isImporting ? 'Processing file...' : 'Choose a landlord spreadsheet'}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            CSV, XLSX or XLS · Maximum 5 MB · 500 landlords per batch
-                                        </p>
-                                    </label>
-                                </div>
-
-                                <div className="space-y-4">
-                                    {importError&&<p role="alert" className="text-sm text-destructive">{importError}</p>}
-                                    <h4 className="text-sm font-semibold text-foreground">Guidelines:</h4>
-                                    <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4">
-                                        <li>Use the standardized CSV template for best results.</li>
-                                        <li>Required: Name, Email, Phone and House Number. Keep phone and house numbers as text in Excel.</li>
-                                        <li>Accounts are scoped to your estate. Every landlord must change their temporary password on first login.</li>
-                                        <li>Existing emails are skipped. Failed jobs can be retried from the tracker.</li>
-                                    </ul>
-                                    <a
-                                        href="/import-template.csv"
-                                        download
-                                        className="inline-flex items-center text-xs font-semibold text-primary hover:underline gap-1.5"
-                                    >
-                                        <Download className="h-3.5 w-3.5" />
-                                        Download CSV Template
-                                    </a>
-                                </div>
-
-                                <div className="flex gap-3 pt-2">
-                                    <Button
-                                        variant="outline"
-                                        className="flex-1"
-                                        onClick={() => setImportModal(false)}
-                                        disabled={isImporting}
-                                    >
-                                        Cancel
-                                    </Button>
-                                </div>
+                            {/* Tabs for Upload vs Import Status */}
+                            <div className="flex border-b border-border mb-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setImportTab('upload')}
+                                    className={cn(
+                                        "pb-2 px-4 text-sm font-semibold border-b-2 transition-colors",
+                                        importTab === 'upload'
+                                            ? "border-primary text-primary"
+                                            : "border-transparent text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Upload File
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setImportTab('tracker')}
+                                    className={cn(
+                                        "pb-2 px-4 text-sm font-semibold border-b-2 transition-colors",
+                                        importTab === 'tracker'
+                                            ? "border-primary text-primary"
+                                            : "border-transparent text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Import Status
+                                </button>
                             </div>
+
+                            {importTab === 'upload' ? (
+                                <div className="space-y-6">
+                                    <div className="p-8 border-2 border-dashed border-border rounded-xl bg-secondary/30 text-center">
+                                        <input
+                                            type="file"
+                                            id="csv-upload"
+                                            className="hidden"
+                                            accept=".csv,.xlsx,.xls"
+                                            onChange={handleFileUpload}
+                                            disabled={isImporting}
+                                        />
+                                        <label
+                                            htmlFor="csv-upload"
+                                            className={cn(
+                                                "cursor-pointer flex flex-col items-center gap-2",
+                                                isImporting && "opacity-50 cursor-not-allowed"
+                                            )}
+                                        >
+                                            <div className="w-12 h-12 rounded-full bg-primary/5 flex items-center justify-center mb-2">
+                                                <FileText className="h-6 w-6 text-primary" />
+                                            </div>
+                                            <p className="font-semibold text-foreground">
+                                                {isImporting ? 'Processing file...' : 'Choose a host / property owner spreadsheet'}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                CSV, XLSX or XLS · Maximum 5 MB · 500 hosts / property owners per batch
+                                            </p>
+                                        </label>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        {importError&&<p role="alert" className="text-sm text-destructive">{importError}</p>}
+                                        <h4 className="text-sm font-semibold text-foreground">Guidelines:</h4>
+                                        <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-4">
+                                            <li>Use the standardized CSV template for best results.</li>
+                                            <li>Required: Name, Email, Phone and House Number. Keep phone and house numbers as text in Excel.</li>
+                                            <li>Accounts are scoped to your estate. Every host / property owner must change their temporary password on first login.</li>
+                                            <li>Existing emails are skipped. Failed jobs can be retried from the tracker.</li>
+                                        </ul>
+                                        <a
+                                            href="/import-template.csv"
+                                            download
+                                            className="inline-flex items-center text-xs font-semibold text-primary hover:underline gap-1.5"
+                                        >
+                                            <Download className="h-3.5 w-3.5" />
+                                            Download CSV Template
+                                        </a>
+                                    </div>
+
+                                    <div className="flex gap-3 pt-2">
+                                        <Button
+                                            variant="outline"
+                                            className="flex-1"
+                                            onClick={() => setImportModal(false)}
+                                            disabled={isImporting}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <LandlordOnboardingTracker version={trackerVersion} />
+                                </div>
+                            )}
                         </motion.div>
                     </div>
                 )}
@@ -727,10 +791,10 @@ export default function Residents() {
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-display font-bold text-foreground">
-                                            Add New Landlord
+                                            Add New Host / Property Owner
                                         </h3>
                                         <p className="text-sm text-muted-foreground">
-                                            Register a new unit landlord
+                                            Register a new unit host / property owner
                                         </p>
                                     </div>
                                 </div>
@@ -813,7 +877,7 @@ export default function Residents() {
                                                 Saving...
                                             </>
                                         ) : (
-                                            "Add Landlord"
+                                            "Add Host / Property Owner"
                                         )}
                                     </Button>
                                 </div>
@@ -847,10 +911,10 @@ export default function Residents() {
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-display font-bold text-foreground">
-                                            Edit Landlord
+                                            Edit Host / Property Owner
                                         </h3>
                                         <p className="text-sm text-muted-foreground">
-                                            Update landlord details
+                                            Update host / property owner details
                                         </p>
                                     </div>
                                 </div>
@@ -932,7 +996,7 @@ export default function Residents() {
                                                 Saving...
                                             </>
                                         ) : (
-                                            "Update Landlord"
+                                            "Update Host / Property Owner"
                                         )}
                                     </Button>
                                 </div>
@@ -965,15 +1029,15 @@ export default function Residents() {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-display font-bold text-foreground">
-                                        Delete Landlord?
+                                        Delete Account?
                                     </h3>
                                     <p className="text-sm text-muted-foreground">
-                                        This action is irreversible
+                                        This may suspend or permanently delete
                                     </p>
                                 </div>
                             </div>
                             <p className="text-sm text-muted-foreground mb-6">
-                                Are you sure you want to delete <b>{deleteModal.full_name}</b>? This will remove all associated data and occupants.
+                                Are you sure you want to delete <b>{deleteModal.full_name}</b>? If the account has related records, it will be suspended to preserve history. Otherwise it will be permanently deleted.
                             </p>
                             <div className="flex gap-3">
                                 <Button

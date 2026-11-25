@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Building2, CreditCard, Users, ScrollText, Layers, Menu, LogOut, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Building2, CreditCard, Users, ScrollText, Layers, Activity, Menu, LogOut, ShieldCheck, Inbox } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Brand } from '@/components/shared/Brand';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { ownerLogout } from '@/actions/owner';
 const links = [
     { href: '/owner', label: 'Platform overview', icon: LayoutDashboard }, { href: '/owner/estates', label: 'Estates', icon: Building2 },
     { href: '/owner/subscriptions', label: 'Subscriptions', icon: CreditCard }, { href: '/owner/users', label: 'User access', icon: Users },
-    { href: '/owner/plans', label: 'Plan catalogue', icon: Layers }, { href: '/owner/audit', label: 'Admin audit trail', icon: ScrollText },
+    { href: '/owner/plans', label: 'Plan catalogue', icon: Layers }, { href: '/owner/security', label: 'Security feed', icon: Activity }, { href: '/owner/sales', label: 'Sales leads', icon: Inbox }, { href: '/owner/audit', label: 'Admin audit trail', icon: ScrollText },
 ];
 export default function OwnerShell({ name, email, children }: { name: string; email: string; children: React.ReactNode }) {
     const path = usePathname(); const [open, setOpen] = useState(false);

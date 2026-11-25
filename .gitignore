@@ -26,6 +26,9 @@ dist-ssr
 .env.local
 !.env.example
 .next
+.open-next
+.wrangler/
+.dev.vars
 public/import-template.csv
 
 

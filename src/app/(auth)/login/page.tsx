@@ -60,9 +60,6 @@ export default function LoginPage() {
                 toast.error(result.error);
             } else {
                 localStorage.setItem('app_id', values.appId);
-                if (result.data?.token?.access_token) {
-                    localStorage.setItem('access_token', result.data.token.access_token);
-                }
 
                 // Refresh contexts before navigation
                 updateEstate({ appId: values.appId });

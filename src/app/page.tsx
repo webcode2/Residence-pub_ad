@@ -8,7 +8,7 @@ import { Brand } from '@/components/shared/Brand';
 const features = [
     { icon: KeyRound, title: 'A better welcome at the gate.', text: 'Give visitors a digital access code. Help guards verify arrivals and keep a clear record of gate activity.', tag: 'ACCESS MANAGEMENT', wide: true },
     { icon: MessagesSquare, title: 'Every conversation, accounted for.', text: 'Connect residents with the gatehouse. Review the full conversation history from your caretaker dashboard.', tag: 'RESIDENT–GUARD CHAT' },
-    { icon: Users, title: 'Know your community.', text: 'Keep residents, landlords, and security officers organised in one estate directory.', tag: 'RESIDENT DIRECTORY' },
+    { icon: Users, title: 'Know your community.', text: 'Keep residents, hosts / property owners, and security officers organised in one estate directory.', tag: 'RESIDENT DIRECTORY' },
     { icon: Receipt, title: 'Bring the details together.', text: 'Review reports and share announcements from a central workspace.', tag: 'ESTATE OPERATIONS' },
 ];
 const faqs = [

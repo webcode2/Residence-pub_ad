@@ -10,6 +10,7 @@ export interface OwnerEstate { id: string; name: string; app_id: string; is_acti
 export interface OwnerOverview { total_estates: number; active_estates: number; suspended_estates: number; total_users: number; estimated_mrr: number; total_verifications_this_month: number; total_active_visitors: number; subscriptions_by_tier: Record<string, number>; users_by_role: Record<string, number>; }
 export interface OwnerUser { id: string; full_name: string | null; email: string; app_id: string; estate_name: string; roles: string[]; is_revoked: boolean; }
 export interface OwnerAudit { id: string; actor_email: string; action: string; target_type: string; target_id: string; changes: Record<string, { before: unknown; after: unknown }>; created_at: string; }
+export interface OwnerAccessLog { id: string; created_at: string; app_id: string; event_type: string; identifier: string; status: 'authorized' | 'denied'; denial_reason: string | null; visitor_name: string | null; details: string | null; }
 export interface PlanQuote { billing_months: number; discount_percent: number; subtotal: number; amount: number; savings: number; currency: string; }
 export interface OwnerPlan { discount_6_months:number; discount_12_months:number; version:number; quotes:PlanQuote[]; tier: string; name: string; description: string; price_monthly: number; monthly_verifications_limit: number | null; rfid_enabled: boolean; log_retention_days: number; realtime_alerts_enabled: boolean; }
 interface Result<T> { data?: T; error?: string; }
@@ -90,4 +91,28 @@ export async function updateOwnerPlan(plan: OwnerPlan) {
     if(!valid.success)return {error:'Check the plan price, limits, and discount percentages.'};
     const {tier,...body}=valid.data;
     return request<OwnerPlan>(`subscriptions/plans/${tier}`,body,'patch');
+}
+
+export async function getOwnerAccessLogs(filters: { status?: string; appId?: string; offset?: number }) {
+    const params = new URLSearchParams({ limit: '50', offset: String(Math.max(0, filters.offset ?? 0)) });
+    if (filters.status === 'authorized' || filters.status === 'denied') params.set('status', filters.status);
+    const appId = filters.appId?.trim();
+    if (appId) params.set('app_id', appId.slice(0, 50));
+    return request<OwnerAccessLog[]>(`access-logs/?${params}`);
+}
+
+export type SalesInquiryStatus = 'new' | 'contacted' | 'closed';
+export interface SalesInquiry { id: string; app_id: string; estate_name: string | null; tier: string; contact_name: string; contact_email: string; phone: string | null; homes: number | null; message: string; status: SalesInquiryStatus; owner_note: string | null; created_at: string; updated_at: string; }
+export interface SalesInquiryPage { inquiries: SalesInquiry[]; has_more: boolean; counts: Record<SalesInquiryStatus, number>; }
+const inquiryStatus = z.enum(['new', 'contacted', 'closed']);
+
+export async function getSalesInquiries(filters: { status?: string; offset?: number }) {
+    const params = new URLSearchParams({ limit: '25', offset: String(Math.max(0, filters.offset ?? 0)) });
+    if (inquiryStatus.safeParse(filters.status).success) params.set('status', filters.status!);
+    return request<SalesInquiryPage>(`sales-inquiries?${params}`);
+}
+
+export async function setSalesInquiryStatus(id: string, status: SalesInquiryStatus) {
+    if (!idSchema.safeParse(id).success || !inquiryStatus.safeParse(status).success) return { error: 'Invalid inquiry update.' };
+    return request<SalesInquiry>(`sales-inquiries/${id}`, { status }, 'patch');
 }

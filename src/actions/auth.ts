@@ -20,8 +20,6 @@ const RegisterSchema = z.object({
 });
 
 export async function loginAction(formData: z.infer<typeof LoginSchema>) {
-    console.log("[loginAction] Starting login with:", formData.email, "appId:", formData.appId);
-
     try {
         // IMPORTANT: Pass X-App-Id per-request, NOT via api.defaults.
         // api.defaults.headers is a shared singleton on the server and can be
@@ -32,7 +30,6 @@ export async function loginAction(formData: z.infer<typeof LoginSchema>) {
         }, {
             headers: { "X-App-Id": formData.appId },
         });
-        console.log("[loginAction] API response status:", response.status);
 
         if (!response.data.user?.roles?.includes('caretaker') ||
             response.data.user.app_id !== formData.appId) {
@@ -43,13 +40,14 @@ export async function loginAction(formData: z.infer<typeof LoginSchema>) {
             await setSession(response.data.user, response.data.access_token || response.data.token?.access_token);
         }
 
+        // The bearer token stays in the httpOnly session cookie; never hand it to browser code.
+        const { token: _token, access_token: _accessToken, ...data } = response.data;
         return {
             success: true,
-            data: response.data,
+            data,
             twoFactorRequired: response.data.twoFactorRequired
         };
     } catch (error: any) {
-        console.error("[loginAction] ERROR:", error.message);
         return {
             error: error.response?.data?.message || error.response?.data?.detail || "Failed to connect to authentication server"
         };
@@ -74,7 +72,8 @@ export async function registerAction(formData: z.infer<typeof RegisterSchema>) {
             await setSession(response.data.user, response.data.access_token || response.data.token?.access_token);
         }
 
-        return { success: true, data: response.data };
+        const { token: _token, access_token: _accessToken, ...data } = response.data;
+        return { success: true, data };
     } catch (error: any) {
         return {
             error: error.response?.data?.message || error.response?.data?.detail || "Failed to connect to authentication server"
@@ -84,12 +83,21 @@ export async function registerAction(formData: z.infer<typeof RegisterSchema>) {
 
 
 export async function logoutAction() {
+    const session = await getSession();
+    if (session?.token) {
+        // Revoke the backend token too; clearing the cookie alone leaves it usable until expiry.
+        await api.post("auth/logout", {}, {
+            headers: { Authorization: `Bearer ${session.token}`, "X-App-Id": session.user?.app_id },
+            timeout: 10000,
+        }).catch(() => undefined);
+    }
     await destroySession();
     redirect("/login");
 }
 
 export async function getSessionAction() {
-    return await getSession();
+    const session = await getSession();
+    return session?.user ? { user: session.user } : null;
 }
 
 export async function verify2FAAction(_code: string) {

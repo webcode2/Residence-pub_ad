@@ -1,260 +1,66 @@
 "use client";
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Megaphone, AlertTriangle, Wrench, Shield, Send, RefreshCw, Bell } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { listAnnouncements, sendAnnouncement } from '@/actions/community';
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import {
-    Bell,
-    Send,
-    Users,
-    Shield,
-    Wrench,
-    AlertTriangle,
-    Megaphone,
-    Loader2,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import api from "@/lib/api";
-import { toast } from "sonner";
-
-const NOTIFICATION_TYPES = [
-    { value: "general", label: "General", icon: Megaphone, color: "text-accent", bg: "bg-accent/10" },
-    { value: "alert", label: "Alert", icon: AlertTriangle, color: "text-warning", bg: "bg-warning/10" },
-    { value: "maintenance", label: "Maintenance", icon: Wrench, color: "text-primary", bg: "bg-primary/10" },
-    { value: "security", label: "Security", icon: Shield, color: "text-destructive", bg: "bg-destructive/10" },
+type Category = 'general' | 'alert' | 'maintenance' | 'security';
+type Audience = 'all' | 'resident' | 'landlord' | 'security';
+const categories: { value: Category; label: string; icon: typeof Megaphone }[] = [
+    { value: 'general', label: 'General', icon: Megaphone }, { value: 'alert', label: 'Alert', icon: AlertTriangle },
+    { value: 'maintenance', label: 'Maintenance', icon: Wrench }, { value: 'security', label: 'Security', icon: Shield },
 ];
-
-const TARGET_OPTIONS = [
-    { value: "", label: "All Users", description: "Broadcast to everyone in the estate" },
-    { value: "resident", label: "Residents", description: "Only residents will receive this" },
-    { value: "landlord", label: "Landlords", description: "Only landlords will receive this" },
-    { value: "security", label: "Security", description: "Only security staff will receive this" },
+const audiences: { value: Audience; label: string }[] = [
+    { value: 'all', label: 'Everyone in the estate' }, { value: 'resident', label: 'Residents' },
+    { value: 'landlord', label: 'Hosts / Property Owners' }, { value: 'security', label: 'Security staff' },
 ];
+const field = 'w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm';
 
-export default function NotificationsPage() {
-    const [title, setTitle] = useState("");
-    const [body, setBody] = useState("");
-    const [type, setType] = useState("general");
-    const [targetRole, setTargetRole] = useState("");
-    const [sending, setSending] = useState(false);
+export default function Announcements() {
+    const cache = useQueryClient();
+    const [title, setTitle] = useState(''), [body, setBody] = useState('');
+    const [category, setCategory] = useState<Category>('general'), [audience, setAudience] = useState<Audience>('all');
+    const [sending, setSending] = useState(false), [offset, setOffset] = useState(0);
+    const history = useQuery({ queryKey: ['announcements', offset], retry: false, refetchOnWindowFocus: false,
+        queryFn: async () => { const r = await listAnnouncements(offset); if (!r.data) throw new Error(r.error); return r.data; } });
+    const canSend = title.trim().length >= 3 && body.trim().length >= 3 && !sending;
 
-    const canSend = title.trim().length > 0 && body.trim().length > 0;
-
-    const handleSend = async () => {
-        if (!canSend || sending) return;
-
+    async function send(event: React.FormEvent) {
+        event.preventDefault();
+        if (!canSend) return;
         setSending(true);
-
         try {
-            await api.post("notifications/notifications", {
-                title: title.trim(),
-                body: body.trim(),
-                type,
-                target_role: targetRole || null,
-            });
+            const r = await sendAnnouncement({ title, body, category, audience });
+            if (!r.data) { toast.error(r.error); return; }
+            toast.success(`Announcement delivered to ${r.data.recipient_count} inbox${r.data.recipient_count === 1 ? '' : 'es'}.`);
+            setTitle(''); setBody(''); setCategory('general'); setAudience('all'); setOffset(0);
+            await cache.invalidateQueries({ queryKey: ['announcements'] });
+        } finally { setSending(false); }
+    }
 
-            toast.success("Notification sent successfully!");
-            setTitle("");
-            setBody("");
-            setType("general");
-            setTargetRole("");
-        } catch (err: any) {
-            const msg =
-                err?.response?.data?.detail ||
-                err?.message ||
-                "Failed to send notification";
-            toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
-        } finally {
-            setSending(false);
-        }
-    };
-
-    const selectedType = NOTIFICATION_TYPES.find((t) => t.value === type)!;
-
-    return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl lg:text-3xl font-display font-bold text-foreground">
-                        Send Notification
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Broadcast notifications to estate members via push and in-app alerts
-                    </p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* ── Form Column ──────────────────────────────────── */}
-                <div className="lg:col-span-2 space-y-6">
-                    {/* Notification Type */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="bg-card rounded-xl border border-border p-6"
-                    >
-                        <label className="text-sm font-medium text-foreground block mb-4">
-                            Notification Type
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            {NOTIFICATION_TYPES.map((t) => (
-                                <button
-                                    key={t.value}
-                                    onClick={() => setType(t.value)}
-                                    className={cn(
-                                        "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200",
-                                        type === t.value
-                                            ? "border-accent bg-accent/5 shadow-sm"
-                                            : "border-transparent bg-secondary/30 hover:bg-secondary/50"
-                                    )}
-                                >
-                                    <div className={cn("p-2.5 rounded-xl", t.bg)}>
-                                        <t.icon className={cn("h-5 w-5", t.color)} />
-                                    </div>
-                                    <span className="text-sm font-medium text-foreground">
-                                        {t.label}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                    </motion.div>
-
-                    {/* Title */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.15 }}
-                        className="bg-card rounded-xl border border-border p-6"
-                    >
-                        <div className="space-y-2">
-                            <label htmlFor="notif-title" className="text-sm font-medium text-foreground">
-                                Title
-                            </label>
-                            <input
-                                id="notif-title"
-                                type="text"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                placeholder="e.g. Scheduled Maintenance Notice"
-                                maxLength={120}
-                                className="w-full p-3 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-accent outline-none transition"
-                            />
-                            <p className="text-xs text-muted-foreground text-right">
-                                {title.length}/120
-                            </p>
-                        </div>
-                    </motion.div>
-
-                    {/* Body / Message */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="bg-card rounded-xl border border-border p-6"
-                    >
-                        <div className="space-y-2">
-                            <label htmlFor="notif-body" className="text-sm font-medium text-foreground">
-                                Message
-                            </label>
-                            <textarea
-                                id="notif-body"
-                                value={body}
-                                onChange={(e) => setBody(e.target.value)}
-                                placeholder="Write your notification message..."
-                                rows={5}
-                                maxLength={500}
-                                className="w-full p-3 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-accent outline-none transition resize-none"
-                            />
-                            <p className="text-xs text-muted-foreground text-right">
-                                {body.length}/500
-                            </p>
-                        </div>
-                    </motion.div>
-                </div>
-
-                {/* ── Sidebar Column ───────────────────────────────── */}
-                <div className="space-y-6">
-                    {/* Target Audience */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.15 }}
-                        className="bg-card rounded-xl border border-border p-6"
-                    >
-                        <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-4">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            Target Audience
-                        </label>
-                        <div className="space-y-2">
-                            {TARGET_OPTIONS.map((opt) => (
-                                <button
-                                    key={opt.value}
-                                    onClick={() => setTargetRole(opt.value)}
-                                    className={cn(
-                                        "w-full text-left p-3 rounded-lg border-2 transition-all duration-200",
-                                        targetRole === opt.value
-                                            ? "border-accent bg-accent/5"
-                                            : "border-transparent bg-secondary/20 hover:bg-secondary/40"
-                                    )}
-                                >
-                                    <p className="font-medium text-sm text-foreground">
-                                        {opt.label}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        {opt.description}
-                                    </p>
-                                </button>
-                            ))}
-                        </div>
-                    </motion.div>
-
-                    {/* Preview Card */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="bg-card rounded-xl border border-border p-6"
-                    >
-                        <h3 className="text-sm font-medium text-foreground mb-4">Preview</h3>
-                        <div className="bg-background rounded-lg border border-border p-4 space-y-2">
-                            <div className="flex items-center gap-2">
-                                <div className={cn("p-1.5 rounded-md", selectedType.bg)}>
-                                    <selectedType.icon className={cn("h-4 w-4", selectedType.color)} />
-                                </div>
-                                <p className="font-semibold text-sm text-foreground truncate">
-                                    {title || "Notification Title"}
-                                </p>
-                            </div>
-                            <p className="text-xs text-muted-foreground line-clamp-3">
-                                {body || "Your message will appear here..."}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider mt-2">
-                                {targetRole
-                                    ? TARGET_OPTIONS.find((o) => o.value === targetRole)?.label
-                                    : "All Users"}{" "}
-                                • Just now
-                            </p>
-                        </div>
-                    </motion.div>
-
-                    {/* Send Button */}
-                    <Button
-                        onClick={handleSend}
-                        disabled={!canSend || sending}
-                        variant="hero"
-                        className="w-full py-6"
-                    >
-                        {sending ? (
-                            <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                        ) : (
-                            <Send className="h-5 w-5 mr-2" />
-                        )}
-                        {sending ? "Sending..." : "Send Notification"}
-                    </Button>
-                </div>
-            </div>
+    return <div className="mx-auto w-full max-w-7xl space-y-6">
+        <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Estate community</p><h1 className="mt-2 text-3xl font-semibold">Announcements</h1><p className="mt-2 text-sm text-muted-foreground">Messages land in each recipient’s in-app inbox and are pushed to their registered phones.</p></div>
+        <div className="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
+            <form onSubmit={send} className="space-y-5 rounded-xl border bg-card p-6">
+                <fieldset><legend className="text-sm font-medium">Type</legend><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{categories.map(c => <label key={c.value}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors ${category === c.value ? 'border-[#7a9563] bg-[#eef3e7] font-medium' : 'border-border hover:bg-muted'}`}>
+                    <input type="radio" name="category" value={c.value} checked={category === c.value} onChange={() => setCategory(c.value)} className="sr-only" /><c.icon size={15} />{c.label}</label>)}</div></fieldset>
+                <label className="block text-sm font-medium">Send to<select value={audience} onChange={e => setAudience(e.target.value as Audience)} className={`${field} mt-2`}>{audiences.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}</select></label>
+                <label className="block text-sm font-medium">Title<input value={title} onChange={e => setTitle(e.target.value)} maxLength={120} className={`${field} mt-2`} placeholder="e.g. Water maintenance on Saturday" /></label>
+                <label className="block text-sm font-medium">Message<Textarea value={body} onChange={e => setBody(e.target.value)} maxLength={2000} rows={6} className="mt-2" placeholder="Share the details residents need" /><span className="mt-1 block text-right text-xs font-normal text-muted-foreground">{body.length}/2000</span></label>
+                <Button type="submit" className="w-full" disabled={!canSend}><Send size={16} className="mr-2" />{sending ? 'Sending…' : 'Send announcement'}</Button>
+            </form>
+            <section className="rounded-xl border bg-card">
+                <div className="flex items-center justify-between gap-3 border-b p-5"><h2 className="font-semibold">Sent announcements</h2><Button variant="outline" size="sm" disabled={history.isFetching} onClick={() => history.refetch()}><RefreshCw size={14} className={history.isFetching ? 'mr-2 animate-spin' : 'mr-2'} />Refresh</Button></div>
+                {history.error && <p role="alert" className="m-5 text-sm text-red-600">{history.error.message}</p>}
+                {history.isLoading ? <p className="p-8 text-center text-sm text-muted-foreground">Loading…</p>
+                : !history.data?.announcements.length ? <p className="p-10 text-center text-sm text-muted-foreground"><Bell className="mx-auto mb-3" />No announcements sent yet.</p>
+                : <ul className="divide-y">{history.data.announcements.map(a => <li key={a.id} className="p-5"><div className="flex flex-wrap items-baseline justify-between gap-2"><p className="font-medium">{a.title}</p><time className="text-xs text-muted-foreground">{new Date(a.created_at).toLocaleString()}</time></div><p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground line-clamp-3">{a.body}</p><p className="mt-3 text-xs text-muted-foreground"><span className="capitalize">{a.category}</span> · {audiences.find(x => x.value === a.audience)?.label} · {a.recipient_count} inboxes · {a.push_sent} pushed{a.push_failed ? ` · ${a.push_failed} push failed` : ''}{a.author_name ? ` · by ${a.author_name}` : ''}</p></li>)}</ul>}
+                <div className="flex justify-end gap-2 border-t p-4"><Button variant="outline" size="sm" disabled={history.isFetching || offset === 0} onClick={() => setOffset(v => Math.max(0, v - 25))}>Previous</Button><Button variant="outline" size="sm" disabled={history.isFetching || !history.data?.has_more} onClick={() => setOffset(v => v + 25)}>Next</Button></div>
+            </section>
         </div>
-    );
+    </div>;
 }

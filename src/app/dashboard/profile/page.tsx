@@ -1,242 +1,59 @@
 "use client";
-
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { User, Mail, Shield, Save, Check, Loader2, Key, Settings } from 'lucide-react';
-import { useUser } from '@/contexts/UserContext';
-import { useEstate } from '@/contexts/EstateContext';
-import { Button } from '@/components/ui/button';
-import { updateProfileAction } from '@/actions/profile';
+import { useEffect, useState } from 'react';
+import { User, Mail, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
+import { useUser } from '@/contexts/UserContext';
+import { Button } from '@/components/ui/button';
+import { updateProfileAction, changePasswordAction } from '@/actions/profile';
+
+const field = 'w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm';
 
 export default function ProfilePage() {
     const { user, refreshUser } = useUser();
-    const { estate } = useEstate();
-    const [isLoading, setIsLoading] = useState(false);
-    const [isSaved, setIsSaved] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
-
-    const [form, setForm] = useState({
-        full_name: '',
-        email: '',
-        password: '',
-    });
-
-    // Sync form state when user data is available
-    useEffect(() => {
-        if (user) {
-            setForm({
-                full_name: user.full_name,
-                email: user.email,
-                password: '',
-            });
-        }
-    }, [user]);
-
+    const [details, setDetails] = useState({ full_name: '', email: '', current_password: '' });
+    const [password, setPassword] = useState({ current_password: '', new_password: '', confirm: '' });
+    const [saving, setSaving] = useState<'details' | 'password' | null>(null);
+    useEffect(() => { if (user) setDetails({ full_name: user.full_name || '', email: user.email, current_password: '' }); }, [user]);
     if (!user) return null;
+    const emailChanged = details.email.trim().toLowerCase() !== user.email.toLowerCase();
 
-    const handleUpdate = async (e: React.FormEvent) => {
-        console.log("[Profile] Submitting form...", form);
-        e.preventDefault();
-
-        if (isLoading) return;
-
-        setIsLoading(true);
-
-        const updateData: any = {
-            full_name: form.full_name,
-            email: form.email,
-        };
-
-        if (form.password) {
-            updateData.password = form.password;
-        }
-
+    async function saveDetails(event: React.FormEvent) {
+        event.preventDefault(); setSaving('details');
         try {
-            console.log("[Profile] Calling updateProfileAction with:", updateData);
-            const result = await updateProfileAction(user.id, user.app_id, updateData);
-            console.log("[Profile] Update result:", result);
+            const r = await updateProfileAction({ full_name: details.full_name, email: details.email, current_password: emailChanged ? details.current_password : undefined });
+            if (r.error) { toast.error(r.error); return; }
+            toast.success('Profile updated.'); await refreshUser();
+        } finally { setSaving(null); }
+    }
+    async function savePassword(event: React.FormEvent) {
+        event.preventDefault();
+        if (password.new_password !== password.confirm) { toast.error('The new passwords do not match.'); return; }
+        setSaving('password');
+        try {
+            const r = await changePasswordAction({ current_password: password.current_password, new_password: password.new_password });
+            if (r.error) { toast.error(r.error); return; }
+            toast.success('Password changed.'); setPassword({ current_password: '', new_password: '', confirm: '' });
+        } finally { setSaving(null); }
+    }
 
-            if (result.success) {
-                toast.success("Profile updated successfully!");
-                await refreshUser();
-                setIsSaved(true);
-                setIsEditing(false);
-                setTimeout(() => setIsSaved(false), 3000);
-            } else {
-                toast.error(result.error);
-            }
-        } catch (error: any) {
-            console.error("[Profile] Update error:", error);
-            toast.error("An unexpected error occurred.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    return (
-        <div className="max-w-4xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl lg:text-3xl font-display font-bold text-foreground">
-                        Personal Profile
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Manage your account details and security settings
-                    </p>
-                </div>
-                {!isEditing && (
-                    <Button
-                        variant="outline"
-                        onClick={() => setIsEditing(true)}
-                        className="rounded-xl font-bold gap-2"
-                    >
-                        <Settings className="h-4 w-4" />
-                        Edit Profile
-                    </Button>
-                )}
+    return <div className="mx-auto w-full max-w-4xl space-y-6">
+        <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Your account</p><h1 className="mt-2 text-3xl font-semibold">Profile</h1><p className="mt-2 text-sm text-muted-foreground">{user.roles.join(', ')} · {user.app_id}</p></div>
+        <form onSubmit={saveDetails} className="space-y-5 rounded-xl border bg-card p-6">
+            <h2 className="flex items-center gap-2 font-semibold"><User size={17} />Account details</h2>
+            <label className="block text-sm font-medium">Full name<input required maxLength={255} value={details.full_name} onChange={e => setDetails({ ...details, full_name: e.target.value })} className={`${field} mt-2`} autoComplete="name" /></label>
+            <label className="block text-sm font-medium">Email address<input required type="email" value={details.email} onChange={e => setDetails({ ...details, email: e.target.value })} className={`${field} mt-2`} autoComplete="email" /></label>
+            {emailChanged && <label className="block text-sm font-medium"><span className="flex items-center gap-2"><Mail size={14} />Current password to confirm the new email</span><input required type="password" value={details.current_password} onChange={e => setDetails({ ...details, current_password: e.target.value })} className={`${field} mt-2`} autoComplete="current-password" /></label>}
+            <div className="flex justify-end"><Button type="submit" disabled={saving !== null}>{saving === 'details' ? 'Saving…' : 'Save details'}</Button></div>
+        </form>
+        <form onSubmit={savePassword} className="space-y-5 rounded-xl border bg-card p-6">
+            <h2 className="flex items-center gap-2 font-semibold"><KeyRound size={17} />Change password</h2>
+            <label className="block text-sm font-medium">Current password<input required type="password" value={password.current_password} onChange={e => setPassword({ ...password, current_password: e.target.value })} className={`${field} mt-2`} autoComplete="current-password" /></label>
+            <div className="grid gap-5 sm:grid-cols-2">
+                <label className="block text-sm font-medium">New password<input required type="password" minLength={12} maxLength={72} value={password.new_password} onChange={e => setPassword({ ...password, new_password: e.target.value })} className={`${field} mt-2`} autoComplete="new-password" /></label>
+                <label className="block text-sm font-medium">Confirm new password<input required type="password" minLength={12} maxLength={72} value={password.confirm} onChange={e => setPassword({ ...password, confirm: e.target.value })} className={`${field} mt-2`} autoComplete="new-password" /></label>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Profile Overview */}
-                <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="md:col-span-1 stat-card flex flex-col items-center text-center py-10"
-                >
-                    <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center mb-4 border-2 border-primary/20">
-                        <User className="h-12 w-12 text-primary" />
-                    </div>
-                    <h3 className="text-xl font-display font-bold text-foreground">
-                        {user.full_name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground capitalize mt-1">
-                        {user.roles.join(', ')}
-                    </p>
-                    <div className="mt-6 w-full pt-6 border-t border-border space-y-3 text-left">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Shield className="h-4 w-4" />
-                            <span>ID: {user.id.substring(0, 8)}...</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Mail className="h-4 w-4" />
-                            <span className="truncate">{user.email}</span>
-                        </div>
-                    </div>
-                </motion.div>
-
-                {/* Edit Form */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="md:col-span-2 stat-card"
-                >
-                    <form onSubmit={handleUpdate} className="space-y-6">
-                        <div className="grid grid-cols-1 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-foreground">Full Name</label>
-                                <div className="relative">
-                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    {isEditing ? (
-                                        <input
-                                            type="text"
-                                            value={form.full_name}
-                                            onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                                            className="w-full pl-10 pr-4 py-3 bg-background border border-accent rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent transition-all shadow-sm"
-                                            placeholder="Enter your full name"
-                                            required
-                                        />
-                                    ) : (
-                                        <div className="w-full pl-10 pr-4 py-3 bg-secondary/30 border border-border rounded-xl text-sm text-foreground">
-                                            {user.full_name}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-foreground">Email Address</label>
-                                <div className="relative">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    {isEditing ? (
-                                        <input
-                                            type="email"
-                                            value={form.email}
-                                            onChange={(e) => setForm({ ...form, email: e.target.value })}
-                                            className="w-full pl-10 pr-4 py-3 bg-background border border-accent rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent transition-all shadow-sm"
-                                            placeholder="admin@estate.com"
-                                            required
-                                        />
-                                    ) : (
-                                        <div className="w-full pl-10 pr-4 py-3 bg-secondary/30 border border-border rounded-xl text-sm text-foreground">
-                                            {user.email}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {isEditing && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: 'auto' }}
-                                    className="space-y-2"
-                                >
-                                    <label className="text-sm font-semibold text-foreground">New Password</label>
-                                    <div className="relative">
-                                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                        <input
-                                            type="password"
-                                            value={form.password}
-                                            onChange={(e) => setForm({ ...form, password: e.target.value })}
-                                            className="w-full pl-10 pr-4 py-3 bg-background border border-accent rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent transition-all shadow-sm"
-                                            placeholder="Leave blank to keep current"
-                                            minLength={8}
-                                        />
-                                    </div>
-                                    <p className="text-[10px] text-muted-foreground italic">
-                                        Must be at least 8 characters long.
-                                    </p>
-                                </motion.div>
-                            )}
-                        </div>
-
-                        {isEditing && (
-                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border relative z-20">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => {
-                                        console.log("Cancel clicked");
-                                        setIsEditing(false);
-                                        setForm({
-                                            full_name: user?.full_name || '',
-                                            email: user?.email || '',
-                                            password: ''
-                                        });
-                                    }}
-                                    className="rounded-xl"
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    disabled={isLoading}
-                                    className="rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground min-w-[140px]"
-                                >
-                                    {isLoading ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <>
-                                            <Save className="h-4 w-4 mr-2" />
-                                            Update Profile
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        )}
-                    </form>
-                </motion.div>
-            </div>
-        </div>
-    );
+            <p className="text-xs text-muted-foreground">At least 12 characters. Other signed-in sessions using your old password stay valid until they expire.</p>
+            <div className="flex justify-end"><Button type="submit" disabled={saving !== null}>{saving === 'password' ? 'Saving…' : 'Change password'}</Button></div>
+        </form>
+    </div>;
 }

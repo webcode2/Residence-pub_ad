@@ -56,12 +56,9 @@ export default function RegisterPage() {
         try {
             const result = await registerAction(values);
             if (result.success) {
-                // Store appId and token in localStorage for frontend state
+                // Remember the estate App ID for the next sign-in
                 if (result.data?.app_id) {
                     localStorage.setItem('app_id', result.data.app_id);
-                }
-                if (result.data?.token?.access_token) {
-                    localStorage.setItem('access_token', result.data.token.access_token);
                 }
 
                 // Refresh contexts before navigation

@@ -1,377 +1,83 @@
 "use client";
-
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-    AlertTriangle,
-    Bell,
-    Send,
-    Plus,
-    Clock,
-    MapPin,
-    User,
-    FileText,
-    X,
-    Check
-} from 'lucide-react';
+import Link from 'next/link';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, Plus, ShieldCheck, MapPin, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { useReports, useCreateReport, useUpdateReport, Report } from '@/hooks/use-reports';
-import { useUser } from '@/contexts/UserContext';
-import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { listReports, triageReport, createReport } from '@/actions/community';
+import type { IncidentReport, ReportSeverity, ReportStatus } from '@/actions/community';
 
-/* 
-interface Incident {
-    id: string;
-    title: string;
-    description: string;
-    severity: 'low' | 'medium' | 'high';
-    location: string;
-    reportedBy: string;
-    timestamp: string;
-    status: 'open' | 'investigating' | 'resolved';
+const statuses: ReportStatus[] = ['open', 'investigating', 'resolved'];
+const field = 'w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm';
+const severityStyle: Record<ReportSeverity, string> = { low: 'bg-muted text-muted-foreground', medium: 'bg-amber-50 text-amber-800', high: 'bg-red-50 text-red-700' };
+const statusStyle: Record<ReportStatus, string> = { open: 'bg-red-50 text-red-700', investigating: 'bg-amber-50 text-amber-800', resolved: 'bg-[#edf2e6] text-[#516c40]' };
+const blank = { title: '', description: '', location: '', severity: 'low' as ReportSeverity, is_anonymous: false };
+
+function Pill({ className, children }: { className: string; children: React.ReactNode }) {
+    return <span className={`inline-block rounded-full px-2.5 py-1 text-xs capitalize whitespace-nowrap ${className}`}>{children}</span>;
 }
 
-const mockIncidents: Incident[] = [
-    {
-        id: '1',
-        title: 'Unauthorized Entry Attempt',
-        description: 'Individual attempted to enter through service gate without valid credentials. Security intervened.',
-        severity: 'high',
-        location: 'Service Gate',
-        reportedBy: 'Officer Ade',
-        timestamp: '2024-01-18T14:30:00',
-        status: 'investigating',
-    },
-    ...
-];
-*/
+export default function IncidentReports() {
+    const cache = useQueryClient();
+    const [status, setStatus] = useState(''), [severity, setSeverity] = useState(''), [offset, setOffset] = useState(0);
+    const [selected, setSelected] = useState<IncidentReport | null>(null), [note, setNote] = useState(''), [next, setNext] = useState<ReportStatus>('open');
+    const [creating, setCreating] = useState(false), [draft, setDraft] = useState(blank);
+    const [saving, setSaving] = useState(false), [error, setError] = useState('');
+    const query = useQuery({ queryKey: ['incident-reports', status, severity, offset], retry: false, refetchOnWindowFocus: false,
+        queryFn: async () => { const r = await listReports({ status, severity, offset }); if (!r.data) throw new Error(r.error); return r.data; } });
+    const refresh = () => cache.invalidateQueries({ queryKey: ['incident-reports'] });
 
-export default function Reports() {
-    const [broadcastOpen, setBroadcastOpen] = useState(false);
-    const [broadcastMessage, setBroadcastMessage] = useState('');
-    const [broadcastSent, setBroadcastSent] = useState(false);
-    const [newIncidentOpen, setNewIncidentOpen] = useState(false);
+    function open(report: IncidentReport) { setSelected(report); setNext(report.status); setNote(report.resolution_note || ''); setError(''); }
+    async function run(action: () => Promise<{ error?: string }>, done: () => void) {
+        setSaving(true); setError('');
+        try { const r = await action(); if (r.error) { setError(r.error); return; } done(); await refresh(); } finally { setSaving(false); }
+    }
+    const counts = query.data?.counts;
+    const reports = query.data?.reports ?? [];
 
-    // New Incident State
-    const [formData, setFormData] = useState({
-        title: '',
-        description: '',
-        severity: 'low' as 'low' | 'medium' | 'high',
-        location: '',
-        is_anonymous: false
-    });
-
-    const { user } = useUser();
-    const appId = user?.app_id || '';
-    const { data: reports = [], isLoading } = useReports(appId);
-    const createMutation = useCreateReport(appId);
-    const updateMutation = useUpdateReport(appId);
-    const isAdmin = user?.roles?.some(r => r.toLowerCase() === 'caretaker' || r.toLowerCase() === 'saas_owner');
-
-    const handleBroadcast = () => {
-        if (!broadcastMessage.trim()) return;
-        setBroadcastSent(true);
-        setTimeout(() => {
-            setBroadcastSent(false);
-            setBroadcastMessage('');
-            setBroadcastOpen(false);
-        }, 2000);
-    };
-
-    const handleCreateReport = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            await createMutation.mutateAsync(formData);
-            toast.success("Incident reported successfully");
-            setNewIncidentOpen(false);
-            setFormData({ title: '', description: '', severity: 'low', location: '', is_anonymous: false });
-        } catch (error: any) {
-            toast.error(error.response?.data?.detail || "Failed to submit report");
-        }
-    };
-
-    const handleStatusUpdate = async (id: string, status: Report['status']) => {
-        try {
-            await updateMutation.mutateAsync({ id, data: { status } });
-            toast.success(`Report status updated to ${status}`);
-        } catch (error: any) {
-            toast.error(error.response?.data?.detail || "Failed to update status");
-        }
-    };
-
-    const severityColors = {
-        low: 'bg-muted text-muted-foreground border-muted',
-        medium: 'bg-warning/10 text-warning border-warning/20',
-        high: 'bg-destructive/10 text-destructive border-destructive/20',
-    };
-
-    const statusColors = {
-        open: 'bg-destructive/10 text-destructive',
-        investigating: 'bg-warning/10 text-warning',
-        resolved: 'bg-success/10 text-success',
-    };
-
-    return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl lg:text-3xl font-display font-bold text-foreground">
-                        Security Reports
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Incident logging and estate-wide broadcasts
-                    </p>
-                </div>
-                <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => setNewIncidentOpen(true)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        New Incident
-                    </Button>
-                    <Button variant="hero" onClick={() => setBroadcastOpen(true)}>
-                        <Bell className="h-4 w-4 mr-2" />
-                        Broadcast
-                    </Button>
-                </div>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="stat-card">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
-                            <AlertTriangle className="h-5 w-5 text-destructive" />
-                        </div>
-                        <span className="text-sm font-medium text-muted-foreground">Open Incidents</span>
-                    </div>
-                    <span className="text-3xl font-display font-bold text-foreground">
-                        {reports.filter(r => r.status === 'open').length}
-                    </span>
-                </div>
-                <div className="stat-card">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
-                            <Clock className="h-5 w-5 text-warning" />
-                        </div>
-                        <span className="text-sm font-medium text-muted-foreground">Investigating</span>
-                    </div>
-                    <span className="text-3xl font-display font-bold text-foreground">
-                        {reports.filter(r => r.status === 'investigating').length}
-                    </span>
-                </div>
-                <div className="stat-card">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
-                            <Check className="h-5 w-5 text-success" />
-                        </div>
-                        <span className="text-sm font-medium text-muted-foreground">Resolved (Total)</span>
-                    </div>
-                    <span className="text-3xl font-display font-bold text-foreground">
-                        {reports.filter(r => r.status === 'resolved').length}
-                    </span>
-                </div>
-            </div>
-
-            {/* Incidents List */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="bg-card rounded-xl border border-border overflow-hidden"
-            >
-                <div className="p-4 border-b border-border">
-                    <h3 className="text-lg font-display font-semibold text-foreground">
-                        Incident Log
-                    </h3>
-                </div>
-
-                <div className="divide-y divide-border">
-                    {isLoading ? (
-                        <div className="p-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                            <Loader2 className="h-8 w-8 animate-spin text-accent" />
-                            <p>Loading security reports...</p>
-                        </div>
-                    ) : reports.length === 0 ? (
-                        <div className="p-12 text-center text-muted-foreground">
-                            No security incidents reported yet.
-                        </div>
-                    ) : reports.map((incident) => (
-                        <div
-                            key={incident.id}
-                            className="p-4 hover:bg-secondary/30 transition-colors"
-                        >
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <span className={cn(
-                                            "inline-flex px-2 py-0.5 rounded text-xs font-semibold border",
-                                            severityColors[incident.severity]
-                                        )}>
-                                            {incident.severity.toUpperCase()}
-                                        </span>
-                                        <span className={cn(
-                                            "inline-flex px-2 py-0.5 rounded text-xs font-semibold capitalize",
-                                            statusColors[incident.status]
-                                        )}>
-                                            {incident.status}
-                                        </span>
-                                    </div>
-                                    <h4 className="font-semibold text-foreground mb-1">{incident.title}</h4>
-                                    <p className="text-sm text-muted-foreground mb-3">{incident.description}</p>
-                                    <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                                        <span className="flex items-center gap-1">
-                                            <MapPin className="h-3.5 w-3.5" />
-                                            {incident.location}
-                                        </span>
-                                        <span className="flex items-center gap-1">
-                                            <User className="h-3.5 w-3.5" />
-                                            {incident.reported_by_name}
-                                        </span>
-                                        <span className="flex items-center gap-1">
-                                            <Clock className="h-3.5 w-3.5" />
-                                            {new Date(incident.created_at).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            })}
-                                        </span>
-                                    </div>
-                                </div>
-                                {isAdmin && incident.status !== 'resolved' && (
-                                    <div className="flex flex-col gap-2">
-                                        {incident.status === 'open' && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleStatusUpdate(incident.id, 'investigating')}
-                                                disabled={updateMutation.isPending}
-                                            >
-                                                Investigate
-                                            </Button>
-                                        )}
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-success hover:text-success hover:bg-success/10"
-                                            onClick={() => handleStatusUpdate(incident.id, 'resolved')}
-                                            disabled={updateMutation.isPending}
-                                        >
-                                            Resolve
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </motion.div>
-
-            {/* New Incident Modal */}
-            <AnimatePresence>
-                {newIncidentOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setNewIncidentOpen(false)}
-                            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative w-full max-w-lg bg-card rounded-2xl shadow-2xl border border-border overflow-hidden z-10"
-                        >
-                            <div className="flex items-center justify-between p-6 border-b border-border">
-                                <h3 className="text-xl font-display font-bold text-foreground">Report Incident</h3>
-                                <Button variant="ghost" size="icon" onClick={() => setNewIncidentOpen(false)}>
-                                    <X className="h-5 w-5" />
-                                </Button>
-                            </div>
-                            <form onSubmit={handleCreateReport} className="p-6 space-y-4">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-foreground">Incident Title</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        placeholder="e.g. Suspicious activity near Gate A"
-                                        className="w-full p-3 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-accent outline-none"
-                                        value={formData.title}
-                                        onChange={e => setFormData({ ...formData, title: e.target.value })}
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Location</label>
-                                        <input
-                                            required
-                                            type="text"
-                                            placeholder="e.g. Block C Parking"
-                                            className="w-full p-3 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-accent outline-none"
-                                            value={formData.location}
-                                            onChange={e => setFormData({ ...formData, location: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-foreground">Severity</label>
-                                        <select
-                                            className="w-full p-3 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-accent outline-none appearance-none"
-                                            value={formData.severity}
-                                            onChange={e => setFormData({ ...formData, severity: e.target.value as any })}
-                                        >
-                                            <option value="low">Low</option>
-                                            <option value="medium">Medium</option>
-                                            <option value="high">High</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-foreground">Details</label>
-                                    <textarea
-                                        required
-                                        rows={4}
-                                        placeholder="Describe what happened..."
-                                        className="w-full p-3 rounded-lg border border-input bg-background text-foreground focus:ring-2 focus:ring-accent outline-none resize-none"
-                                        value={formData.description}
-                                        onChange={e => setFormData({ ...formData, description: e.target.value })}
-                                    />
-                                </div>
-                                <div className="flex items-center gap-2 p-3 bg-secondary/20 rounded-lg">
-                                    <input
-                                        type="checkbox"
-                                        id="anonymous"
-                                        className="w-4 h-4 rounded border-input bg-background text-accent focus:ring-accent"
-                                        checked={formData.is_anonymous}
-                                        onChange={e => setFormData({ ...formData, is_anonymous: e.target.checked })}
-                                    />
-                                    <label htmlFor="anonymous" className="text-sm font-medium text-foreground cursor-pointer">
-                                        Report Anonymously
-                                    </label>
-                                    <span className="text-[10px] text-muted-foreground ml-auto bg-background/50 px-2 py-0.5 rounded">
-                                        Identity hidden from residents
-                                    </span>
-                                </div>
-                                <Button
-                                    type="submit"
-                                    className="w-full py-6"
-                                    variant="hero"
-                                    disabled={createMutation.isPending}
-                                >
-                                    {createMutation.isPending ? (
-                                        <Loader2 className="h-5 w-5 animate-spin" />
-                                    ) : (
-                                        "Submit Security Report"
-                                    )}
-                                </Button>
-                            </form>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+    return <div className="mx-auto w-full max-w-7xl space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+            <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Estate safety</p><h1 className="mt-2 text-3xl font-semibold">Incident reports</h1><p className="mt-2 text-sm text-muted-foreground">Reports filed by residents, hosts / property owners and guards from the app. Reporters are notified when you change a report’s status.</p></div>
+            <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={query.isFetching} onClick={() => query.refetch()}><RefreshCw size={16} className={query.isFetching ? 'mr-2 animate-spin' : 'mr-2'} />Refresh</Button><Button variant="outline" asChild><Link href="/dashboard/notifications"><Megaphone size={16} className="mr-2" />Send announcement</Link></Button><Button onClick={() => { setDraft(blank); setError(''); setCreating(true); }}><Plus size={16} className="mr-2" />Log incident</Button></div>
         </div>
-    );
+        <div className="grid gap-4 sm:grid-cols-3">{statuses.map(s => <button key={s} onClick={() => { setStatus(status === s ? '' : s); setOffset(0); }} aria-pressed={status === s}
+            className={`rounded-xl border bg-card p-5 text-left transition-colors hover:border-[#b6c8a7] ${status === s ? 'border-[#7a9563] ring-1 ring-[#7a9563]' : 'border-border'}`}><p className="text-xs capitalize text-muted-foreground">{s}</p><p className="mt-3 text-3xl font-medium tabular-nums">{counts ? counts[s] : '—'}</p></button>)}</div>
+        <div className="flex flex-wrap gap-3">
+            <select aria-label="Filter by status" value={status} onChange={e => { setStatus(e.target.value); setOffset(0); }} className="rounded-md border border-input bg-card px-3 py-2.5 text-sm"><option value="">All statuses</option>{statuses.map(s => <option key={s} value={s}>{s}</option>)}</select>
+            <select aria-label="Filter by severity" value={severity} onChange={e => { setSeverity(e.target.value); setOffset(0); }} className="rounded-md border border-input bg-card px-3 py-2.5 text-sm"><option value="">All severities</option>{['low', 'medium', 'high'].map(s => <option key={s} value={s}>{s}</option>)}</select>
+        </div>
+        {query.error && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{query.error.message}</p>}
+        <div className="overflow-x-auto rounded-xl border bg-card"><table className="w-full text-left text-sm"><thead className="border-b bg-muted/40"><tr>{['Reported', 'Incident', 'Severity', 'Status', ''].map(h => <th key={h} className="p-4 font-medium">{h}</th>)}</tr></thead><tbody>
+            {query.isLoading ? <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Loading reports…</td></tr>
+            : reports.length === 0 ? <tr><td colSpan={5} className="p-10 text-center text-muted-foreground"><ShieldCheck className="mx-auto mb-3" />No incident reports match these filters.</td></tr>
+            : reports.map(r => <tr key={r.id} className="border-b last:border-0 align-top">
+                <td className="p-4 whitespace-nowrap"><p>{new Date(r.created_at).toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">{r.reported_by_name} · <span className="capitalize">{r.reporter_role}</span></p></td>
+                <td className="p-4 max-w-md"><p className="font-medium">{r.title}</p><p className="mt-1 text-muted-foreground line-clamp-2">{r.description}</p><p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={12} />{r.location}</p></td>
+                <td className="p-4"><Pill className={severityStyle[r.severity]}>{r.severity}</Pill></td>
+                <td className="p-4"><Pill className={statusStyle[r.status]}>{r.status}</Pill></td>
+                <td className="p-4 text-right"><Button variant="outline" size="sm" onClick={() => open(r)}>Review</Button></td>
+            </tr>)}
+        </tbody></table><div className="flex justify-end gap-2 border-t p-4"><Button variant="outline" disabled={query.isFetching || offset === 0} onClick={() => setOffset(v => Math.max(0, v - 50))}>Previous</Button><Button variant="outline" disabled={query.isFetching || !query.data?.has_more} onClick={() => setOffset(v => v + 50)}>Next</Button></div></div>
+
+        <Dialog open={selected !== null} onOpenChange={o => { if (!saving && !o) setSelected(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{selected?.title}</DialogTitle><DialogDescription>{selected && `${selected.reported_by_name} · ${selected.location} · ${new Date(selected.created_at).toLocaleString()}`}</DialogDescription></DialogHeader>
+            <p className="whitespace-pre-wrap text-sm">{selected?.description}</p>
+            <label className="text-sm font-medium">Status<select value={next} onChange={e => setNext(e.target.value as ReportStatus)} className={`${field} mt-2 capitalize`}>{statuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+            <label className="text-sm font-medium">Note for the record<Textarea className="mt-2" maxLength={1000} value={note} onChange={e => setNote(e.target.value)} placeholder="What was done, or what happens next" /></label>
+            {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+            <Button disabled={saving} onClick={() => selected && void run(() => triageReport(selected.id, { status: next, resolution_note: note }), () => setSelected(null))}>{saving ? 'Saving…' : 'Save'}</Button>
+        </DialogContent></Dialog>
+
+        <Dialog open={creating} onOpenChange={o => { if (!saving && !o) setCreating(false); }}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Log an incident</DialogTitle><DialogDescription>Record an incident you observed or were told about. It appears in this list as filed by you.</DialogDescription></DialogHeader>
+            <form className="space-y-4" onSubmit={e => { e.preventDefault(); void run(() => createReport(draft), () => setCreating(false)); }}>
+                <label className="block text-sm font-medium">Title<input required minLength={3} maxLength={120} value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} className={`${field} mt-2`} /></label>
+                <label className="block text-sm font-medium">Location<input required minLength={2} maxLength={200} value={draft.location} onChange={e => setDraft({ ...draft, location: e.target.value })} className={`${field} mt-2`} placeholder="e.g. North gate" /></label>
+                <label className="block text-sm font-medium">Severity<select value={draft.severity} onChange={e => setDraft({ ...draft, severity: e.target.value as ReportSeverity })} className={`${field} mt-2 capitalize`}>{['low', 'medium', 'high'].map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+                <label className="block text-sm font-medium">What happened<Textarea required minLength={10} maxLength={2000} value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} className="mt-2" /></label>
+                {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+                <Button className="w-full" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Log incident'}</Button>
+            </form>
+        </DialogContent></Dialog>
+    </div>;
 }
