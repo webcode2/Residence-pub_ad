@@ -33,6 +33,7 @@ export default function SecurityStaffPage() {
     const [credentials, setCredentials] = useState<OfficerCredentials | null>(null);
     const [copied, setCopied] = useState(false);
     const [busyId, setBusyId] = useState<string | null>(null);
+    const [confirmReset, setConfirmReset] = useState<SecurityOfficer | null>(null);
 
     async function register(event: React.FormEvent) {
         event.preventDefault();
@@ -80,7 +81,7 @@ export default function SecurityStaffPage() {
                         <td className="p-4"><p className="font-medium">{o.full_name || '—'}</p><p className="text-xs text-muted-foreground break-all">{o.email}{o.phone ? ` · ${o.phone}` : ''}</p></td>
                         <td className="p-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS[o.status].tone}`}>{STATUS[o.status].label}</span></td>
                         <td className="p-4"><div className="flex flex-wrap justify-end gap-2">
-                            {o.status !== 'suspended' && <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => act(o, 'reset')}><KeyRound size={14} />Reset password</Button>}
+                            {o.status !== 'suspended' && <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => setConfirmReset(o)}><KeyRound size={14} />Reset password</Button>}
                             {o.status === 'suspended'
                                 ? <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => act(o, 'reinstate')}>Reinstate</Button>
                                 : <Button size="sm" variant="outline" disabled={busyId === o.id} onClick={() => act(o, 'suspend')}>Suspend</Button>}
@@ -100,6 +101,16 @@ export default function SecurityStaffPage() {
                 </form>
             </section>
         </div>
+        <Dialog open={!!confirmReset} onOpenChange={open => { if (!open) setConfirmReset(null); }}>
+            <DialogContent>
+                <DialogTitle>Reset password for {confirmReset?.full_name || confirmReset?.email}?</DialogTitle>
+                <DialogDescription>This issues a new temporary password and the current one stops working immediately{confirmReset?.status === 'awaiting_first_sign_in' ? ', including the one you just gave this officer' : ''}. The officer must set their own password at their next sign-in.</DialogDescription>
+                <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setConfirmReset(null)}>Cancel</Button>
+                    <Button disabled={!!confirmReset && busyId === confirmReset.id} onClick={async () => { const officer = confirmReset; setConfirmReset(null); if (officer) await act(officer, 'reset'); }}>Reset password</Button>
+                </div>
+            </DialogContent>
+        </Dialog>
         <Dialog open={!!credentials} onOpenChange={open => { if (!open) setCredentials(null); }}>
             <DialogContent>
                 <DialogTitle>Sign-in details for {credentials?.full_name || credentials?.email}</DialogTitle>
