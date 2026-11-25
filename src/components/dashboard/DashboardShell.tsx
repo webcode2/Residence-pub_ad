@@ -16,6 +16,7 @@ const groups = [
     { label: 'WORKSPACE', items: [
         { path: '/dashboard', label: 'Overview', icon: LayoutDashboard },
         { path: '/dashboard/residents', label: 'Resident directory', icon: Users },
+        { path: '/dashboard/security', label: 'Security staff', icon: ShieldCheck },
         { path: '/dashboard/logs', label: 'Access logs', icon: FileText },
         { path: '/dashboard/conversations', label: 'Conversations', icon: MessagesSquare },
         { path: '/dashboard/sos', label: 'SOS alert history', icon: ShieldCheck },
