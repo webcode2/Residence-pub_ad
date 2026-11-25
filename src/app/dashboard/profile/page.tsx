@@ -49,10 +49,10 @@ export default function ProfilePage() {
             <h2 className="flex items-center gap-2 font-semibold"><KeyRound size={17} />Change password</h2>
             <label className="block text-sm font-medium">Current password<input required type="password" value={password.current_password} onChange={e => setPassword({ ...password, current_password: e.target.value })} className={`${field} mt-2`} autoComplete="current-password" /></label>
             <div className="grid gap-5 sm:grid-cols-2">
-                <label className="block text-sm font-medium">New password<input required type="password" minLength={12} maxLength={72} value={password.new_password} onChange={e => setPassword({ ...password, new_password: e.target.value })} className={`${field} mt-2`} autoComplete="new-password" /></label>
-                <label className="block text-sm font-medium">Confirm new password<input required type="password" minLength={12} maxLength={72} value={password.confirm} onChange={e => setPassword({ ...password, confirm: e.target.value })} className={`${field} mt-2`} autoComplete="new-password" /></label>
+                <label className="block text-sm font-medium">New password<input required type="password" minLength={8} maxLength={72} value={password.new_password} onChange={e => setPassword({ ...password, new_password: e.target.value })} className={`${field} mt-2`} autoComplete="new-password" /></label>
+                <label className="block text-sm font-medium">Confirm new password<input required type="password" minLength={8} maxLength={72} value={password.confirm} onChange={e => setPassword({ ...password, confirm: e.target.value })} className={`${field} mt-2`} autoComplete="new-password" /></label>
             </div>
-            <p className="text-xs text-muted-foreground">At least 12 characters. Other signed-in sessions using your old password stay valid until they expire.</p>
+            <p className="text-xs text-muted-foreground">At least 8 characters. Other signed-in sessions using your old password stay valid until they expire.</p>
             <div className="flex justify-end"><Button type="submit" disabled={saving !== null}>{saving === 'password' ? 'Saving…' : 'Change password'}</Button></div>
         </form>
     </div>;

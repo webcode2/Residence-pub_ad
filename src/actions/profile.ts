@@ -13,7 +13,7 @@ const DetailsSchema = z.object({
 });
 const PasswordSchema = z.object({
     current_password: z.string().min(1).max(128),
-    new_password: z.string().min(12).max(72),
+    new_password: z.string().min(8).max(72),
 });
 
 function failure(error: unknown, fallback: string): string {
@@ -44,7 +44,7 @@ export async function updateProfileAction(values: z.infer<typeof DetailsSchema>)
 
 export async function changePasswordAction(values: z.infer<typeof PasswordSchema>) {
     const parsed = PasswordSchema.safeParse(values);
-    if (!parsed.success) return { error: "Use a new password of 12 to 72 characters." };
+    if (!parsed.success) return { error: "Use a new password of 8 to 72 characters." };
     try {
         const response = await api.post("auth/change-password", parsed.data, { headers: await caretakerHeaders(), timeout: 15000 });
         await persist(response.data);
