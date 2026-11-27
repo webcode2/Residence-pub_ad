@@ -54,6 +54,19 @@ export async function loginAction(formData: z.infer<typeof LoginSchema>) {
     }
 }
 
+export async function requestReinstatementAction(input: { appId: string; email: string }) {
+    const parsed = LoginSchema.pick({ appId: true, email: true }).safeParse(input);
+    if (!parsed.success) return { error: "Enter your estate App ID and email." };
+    try {
+        const response = await api.post<{message: string}>("auth/request-reinstatement",
+            { email: parsed.data.email },
+            { headers: { "X-App-Id": parsed.data.appId.trim().toUpperCase() }, timeout: 10000 });
+        return { message: response.data.message };
+    } catch {
+        return { error: "Unable to submit the request. Please try again." };
+    }
+}
+
 export async function registerAction(formData: z.infer<typeof RegisterSchema>) {
     const parsed = RegisterSchema.safeParse(formData);
     if (!parsed.success) return { error: "Check the registration details and accept the terms before continuing." };

@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { Suspense, useState, useMemo } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search,
@@ -32,15 +34,32 @@ import {uploadLandlordFile} from '@/actions/directory';
 import {LandlordImportStatus,LandlordOnboardingTracker} from '@/components/LandlordOnboardingTracker';
 
 
-import { useResidents, useCreateLandlord, useImportLandlords, useRevokeUser, useRestoreUser, useUpdateUser, useDeleteUser } from '@/hooks/use-residents';
+import { useResidents, useCreateLandlord, useImportLandlords, useRevokeUser, useRestoreUser, useUpdateUser, useArchiveUser } from '@/hooks/use-residents';
 import { useUser } from '@/contexts/UserContext';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+
+type PasswordReset = { id: string; status: 'queued' | 'retrying' | 'sent' | 'cancelled' };
+
+function PasswordResetStatus({ job }: { job?: PasswordReset | null }) {
+    if (!job) return null;
+    const labels = {
+        queued: "Password email queued",
+        retrying: "Password email delivery will retry",
+        sent: "Temporary password email accepted",
+        cancelled: "Password reset cancelled",
+    };
+    return <p className="mt-1 text-xs text-muted-foreground" title={`Reset request ${job.id}`}>
+        {labels[job.status]}
+    </p>;
+}
 
 interface Occupant {
     id: string;
     full_name: string;
     roles: string[];
+    returning_user?: boolean;
+    password_reset?: PasswordReset | null;
     email: string;
     is_revoked: boolean;
     relationship_type?: string;
@@ -50,6 +69,8 @@ interface Occupant {
 interface Resident {
     id: string;
     full_name: string;
+    returning_user?: boolean;
+    password_reset?: PasswordReset | null;
     email: string;
     house_number: string | null;
     street_name: string | null;
@@ -60,17 +81,27 @@ interface Resident {
     occupants: Occupant[];
 }
 
-export default function Residents() {
+export default function ResidentsPage() {
+    return <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Loading directory…</p>}>
+        <Residents />
+    </Suspense>;
+}
+
+function Residents() {
+    const view = useSearchParams().get('view');
+    const accountFilter = view === 'password-resets' || view === 'returning-users' ? view : null;
     const [search, setSearch] = useState('');
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
+    const [suspensionReason, setSuspensionReason] = useState('');
     const [revokeModal, setRevokeModal] = useState<{id: string; name: string; action: 'revoke'|'restore'} | null>(null);
     const [offboardModal, setOffboardModal] = useState<string | null>(null);
     const [importModal, setImportModal] = useState(false);
     const [importTab, setImportTab] = useState<'upload' | 'tracker'>('upload');
     const [manualModal, setManualModal] = useState(false);
+    const [resetPassword, setResetPassword] = useState(false);
     const [editModal, setEditModal] = useState<Resident | null>(null);
-    const [deleteModal, setDeleteModal] = useState<Resident | null>(null);
+    const [archiveModal, setArchiveModal] = useState<Resident | null>(null);
     const [manualFormData, setManualFormData] = useState({
         name: '',
         phone: '',
@@ -90,27 +121,31 @@ export default function Residents() {
     const revokeMutation = useRevokeUser(appId);
     const restoreMutation = useRestoreUser(appId);
     const updateMutation = useUpdateUser(appId);
-    const deleteMutation = useDeleteUser(appId);
+    const archiveMutation = useArchiveUser(appId);
 
     const filteredResidents = useMemo<Resident[]>(() => {
-        if (!search) return residents;
-        const searchLower = search.toLowerCase();
-        return residents.filter(
-            (r: Resident) =>
-                r.full_name.toLowerCase().includes(searchLower) ||
-                (r.house_number && r.house_number.toLowerCase().includes(searchLower)) ||
-                r.email.toLowerCase().includes(searchLower)
-        );
-    }, [search, residents]);
+        const searchLower = search.trim().toLowerCase();
+        return residents.filter((resident: Resident) => {
+            const accounts = [resident, ...(resident.occupants ?? [])];
+            if (accountFilter === 'password-resets' && !accounts.some(account =>
+                account.password_reset?.status === 'queued' || account.password_reset?.status === 'retrying')) return false;
+            if (accountFilter === 'returning-users' && !accounts.some(account => account.returning_user)) return false;
+
+            return !searchLower ||
+                (resident.house_number ?? '').toLowerCase().includes(searchLower) ||
+                accounts.some(account => account.full_name.toLowerCase().includes(searchLower) ||
+                    account.email.toLowerCase().includes(searchLower));
+        });
+    }, [accountFilter, search, residents]);
 
     const handleRevoke = async () => {
-        if (!revokeModal) return;
+        if (!revokeModal || (revokeModal.action === 'revoke' && !suspensionReason.trim())) return;
         try {
             if (revokeModal.action === 'restore') {
                 await restoreMutation.mutateAsync(revokeModal.id);
                 toast.success("Account restored successfully");
             } else {
-                await revokeMutation.mutateAsync(revokeModal.id);
+                await revokeMutation.mutateAsync({userId: revokeModal.id, reason: suspensionReason.trim()});
                 toast.success("Account suspended successfully");
             }
             setRevokeModal(null);
@@ -184,16 +219,24 @@ export default function Residents() {
         if (!editModal) return;
         setIsImporting(true);
         try {
-            await updateMutation.mutateAsync({
+            const updated = await updateMutation.mutateAsync({
                 userId: editModal.id,
                 data: {
                     full_name: editModal.full_name,
                     email: editModal.email,
                     house_number: editModal.house_number,
-                    street_name: editModal.street_name
+                    street_name: editModal.street_name,
+                    phone: editModal.phone || null,
+                    reset_password: resetPassword
                 }
             });
-            toast.success("Host / Property Owner updated successfully");
+            if (updated?.password_reset?.id) {
+                toast.success("Temporary password email queued", {
+                    description: `Request reference: ${updated.password_reset.id}`,
+                });
+            } else {
+                toast.success("Account updated successfully");
+            }
             setEditModal(null);
         } catch (error: any) {
             toast.error(error.message || "Failed to update host / property owner");
@@ -202,18 +245,14 @@ export default function Residents() {
         }
     };
 
-    const handleDelete = async () => {
-        if (!deleteModal) return;
+    const handleArchive = async () => {
+        if (!archiveModal || !suspensionReason.trim()) return;
         try {
-            const result = await deleteMutation.mutateAsync(deleteModal.id);
-            if (result?.status === 'revoked') {
-                toast.info(result.message || "Account suspended to preserve related records.");
-            } else {
-                toast.success(result?.message || "Account deleted successfully");
-            }
-            setDeleteModal(null);
+            const result = await archiveMutation.mutateAsync({userId: archiveModal.id, reason: suspensionReason.trim()});
+            toast.success(result?.message || "Account moved to Archive");
+            setArchiveModal(null);
         } catch (error: any) {
-            toast.error(error.message || "Failed to delete account");
+            toast.error(error.message || "Failed to archive account");
         }
     };
 
@@ -279,6 +318,11 @@ export default function Residents() {
             </div>
 
             <LandlordImportStatus version={trackerVersion} onFinished={refetch} onOpen={()=>{setImportTab('tracker');setImportModal(true);}} />
+
+            {accountFilter && <div className="flex flex-wrap items-center gap-3 text-sm">
+                <p>{accountFilter === 'password-resets' ? 'Showing pending password emails' : 'Showing returning users'}</p>
+                <Link href="/dashboard/residents" className="text-primary underline underline-offset-2">Clear filter</Link>
+            </div>}
 
             {/* Search */}
             <div className="relative max-w-md">
@@ -354,6 +398,8 @@ export default function Residents() {
                                                         <span className="text-accent/70 font-bold tracking-widest uppercase text-[10px]">YOU</span>
                                                     ) : resident.email}
                                                 </p>
+                                                {resident.returning_user && <span className="text-xs font-medium text-warning">Returning user</span>}
+                                                <PasswordResetStatus job={resident.password_reset} />
                                                 {resident.phone&&<p className="text-sm text-muted-foreground">{resident.phone}</p>}
                                             </div>
                                         </td>
@@ -406,19 +452,19 @@ export default function Residents() {
                                                         <ChevronDown className="h-4 w-4" />
                                                     )}
                                                 </Button>
-                                                <Button
+                                                {!accountFilter && <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => setEditModal(resident)}
+                                                    onClick={() => { setResetPassword(false); setEditModal(resident); }}
                                                     className="hover:bg-accent/10"
                                                     title="Edit Details"
                                                 >
                                                     <Edit className="h-4 w-4" />
-                                                </Button>
+                                                </Button>}
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => setRevokeModal({id: resident.id, name: resident.full_name, action: resident.status === 'suspended' ? 'restore' : 'revoke'})}
+                                                    onClick={() => { setSuspensionReason(''); setRevokeModal({id: resident.id, name: resident.full_name, action: resident.status === 'suspended' ? 'restore' : 'revoke'}); }}
                                                     className={cn(resident.status === 'suspended' ? "text-success hover:text-success hover:bg-success/10" : "text-warning hover:text-warning hover:bg-warning/10")}
                                                     title={resident.status === 'suspended' ? "Restore Account" : "Suspend Account"}
                                                 >
@@ -427,9 +473,9 @@ export default function Residents() {
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => setDeleteModal(resident)}
+                                                    onClick={() => { setSuspensionReason(''); setArchiveModal(resident); }}
                                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    title="Delete Account"
+                                                    title="Move to Archive"
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
@@ -437,7 +483,7 @@ export default function Residents() {
                                         </td>
                                     </tr>
                                     <AnimatePresence>
-                                        {expandedRows.has(resident.id) && (
+                                        {(expandedRows.has(resident.id) || accountFilter !== null) && (
                                             <tr>
                                                 <td colSpan={6} className="bg-secondary/10 px-4 py-0 border-b border-border">
                                                     <motion.div
@@ -469,6 +515,8 @@ export default function Residents() {
                                                                                     {occ.id === currentUser?.id ? (
                                                                                         <span className="text-accent font-black tracking-widest uppercase text-xs">YOU</span>
                                                                                     ) : occ.full_name}
+                                                                                    {occ.returning_user && <span className="ml-2 text-xs font-medium text-warning">Returning user</span>}
+                                                                                    <PasswordResetStatus job={occ.password_reset} />
                                                                                 </p>
                                                                                 <p className="text-xs text-muted-foreground">{occ.email}</p><p className="text-xs text-muted-foreground capitalize">{occ.relationship_type||'Household member'}{occ.invitation_id?` · Invitation ${occ.invitation_id.slice(0,8)}`:''}</p>
                                                                             </div>
@@ -478,7 +526,7 @@ export default function Residents() {
                                                                                 variant="ghost"
                                                                                 size="icon"
                                                                                 className={cn("h-8 w-8", occ.is_revoked ? "text-success hover:text-success" : "text-destructive hover:text-destructive")}
-                                                                                onClick={() => setRevokeModal({id: occ.id, name: occ.full_name, action: occ.is_revoked ? 'restore' : 'revoke'})}
+                                                                                onClick={() => { setSuspensionReason(''); setRevokeModal({id: occ.id, name: occ.full_name, action: occ.is_revoked ? 'restore' : 'revoke'}); }}
                                                                                 title={occ.is_revoked ? "Restore account" : "Suspend account"}
                                                                             >
                                                                                 {occ.is_revoked ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
@@ -551,6 +599,10 @@ export default function Residents() {
                                     ? 'This will restore account access. The user will be able to sign in again.'
                                     : 'This will immediately suspend account access. The user will no longer be able to sign in or enter the estate.'}
                             </p>
+                            {revokeModal.action === 'revoke' && <label className="block space-y-2 text-sm font-medium">
+                                <span>Suspension reason</span>
+                                <textarea className="block w-full rounded-md border border-input bg-background p-3" rows={3} maxLength={500} required value={suspensionReason} onChange={event => setSuspensionReason(event.target.value)} />
+                            </label>}
                             <div className="flex gap-3">
                                 <Button
                                     variant="outline"
@@ -563,7 +615,7 @@ export default function Residents() {
                                     variant={revokeModal.action === 'restore' ? 'default' : 'destructive'}
                                     className="flex-1"
                                     onClick={handleRevoke}
-                                    disabled={revokeMutation.isPending || restoreMutation.isPending}
+                                    disabled={revokeMutation.isPending || restoreMutation.isPending || (revokeModal.action === 'revoke' && !suspensionReason.trim())}
                                 >
                                     {(revokeMutation.isPending || restoreMutation.isPending) ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -911,7 +963,7 @@ export default function Residents() {
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-display font-bold text-foreground">
-                                            Edit Host / Property Owner
+                                            Edit account
                                         </h3>
                                         <p className="text-sm text-muted-foreground">
                                             Update host / property owner details
@@ -974,6 +1026,30 @@ export default function Residents() {
                                     </div>
                                 </div>
 
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit-phone">Phone</Label>
+                                    <Input
+                                        id="edit-phone"
+                                        type="tel"
+                                        maxLength={40}
+                                        value={editModal.phone || ""}
+                                        onChange={(e) => setEditModal({ ...editModal, phone: e.target.value })}
+                                        disabled={isImporting}
+                                    />
+                                </div>
+                                <label className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        role="switch"
+                                        checked={resetPassword}
+                                        onChange={(e) => setResetPassword(e.target.checked)}
+                                        disabled={isImporting || editModal.status === "suspended"}
+                                    />
+                                    <span>
+                                        <span className="block font-medium">Reset password</span>
+                                        Queue a generated temporary password. The existing password stays active until the email provider accepts delivery.
+                                    </span>
+                                </label>
                                 <div className="flex gap-3 pt-4">
                                     <Button
                                         type="button"
@@ -996,7 +1072,7 @@ export default function Residents() {
                                                 Saving...
                                             </>
                                         ) : (
-                                            "Update Host / Property Owner"
+                                            "Save account"
                                         )}
                                     </Button>
                                 </div>
@@ -1006,15 +1082,15 @@ export default function Residents() {
                 )}
             </AnimatePresence>
 
-            {/* Delete Confirmation Modal */}
+            {/* Archive Confirmation Modal */}
             <AnimatePresence>
-                {deleteModal && (
+                {archiveModal && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            onClick={() => setDeleteModal(null)}
+                            onClick={() => setArchiveModal(null)}
                             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                         />
                         <motion.div
@@ -1029,34 +1105,38 @@ export default function Residents() {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-display font-bold text-foreground">
-                                        Delete Account?
+                                        Move account to Archive?
                                     </h3>
                                     <p className="text-sm text-muted-foreground">
-                                        This may suspend or permanently delete
+                                        Account access will be suspended.
                                     </p>
                                 </div>
                             </div>
                             <p className="text-sm text-muted-foreground mb-6">
-                                Are you sure you want to delete <b>{deleteModal.full_name}</b>? If the account has related records, it will be suspended to preserve history. Otherwise it will be permanently deleted.
+                                Move <b>{archiveModal.full_name}</b> out of the resident directory and into Archive?
                             </p>
+                            <label className="block space-y-2 text-sm font-medium">
+                                <span>Suspension reason</span>
+                                <textarea className="block w-full rounded-md border border-input bg-background p-3" rows={3} maxLength={500} required value={suspensionReason} onChange={event => setSuspensionReason(event.target.value)} />
+                            </label>
                             <div className="flex gap-3">
                                 <Button
                                     variant="outline"
                                     className="flex-1"
-                                    onClick={() => setDeleteModal(null)}
+                                    onClick={() => setArchiveModal(null)}
                                 >
                                     Cancel
                                 </Button>
                                 <Button
                                     variant="destructive"
                                     className="flex-1"
-                                    onClick={handleDelete}
-                                    disabled={deleteMutation.isPending}
+                                    onClick={handleArchive}
+                                    disabled={archiveMutation.isPending || !suspensionReason.trim()}
                                 >
-                                    {deleteMutation.isPending ? (
+                                    {archiveMutation.isPending ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                        "Delete"
+                                        "Move to Archive"
                                     )}
                                 </Button>
                             </div>

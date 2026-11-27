@@ -14,7 +14,7 @@ export async function cardActivationAction(action:'start'|'confirm'|'cancel',tie
   const origin=action==='start'?await appOrigin():null;
   if(action==='start'&&!consent)return {error:'Accept the automatic billing terms to continue.'};
   if(action==='start'&&!origin)return {error:'Please reload this page before starting card setup.'};
-  const body=action==='start'?{tier,consent,expected_price_monthly:expectedPrice,success_url:new URL('/dashboard/subscription?activation=complete',origin!).href,cancel_url:new URL('/dashboard/subscription?activation=cancelled',origin!).href}:{};
+  const body=action==='start'?{tier,consent,expected_price_monthly:expectedPrice,success_url:new URL('/dashboard/settings?activation=complete#subscription',origin!).href,cancel_url:new URL('/dashboard/settings?activation=cancelled#subscription',origin!).href}:{};
   const {data}=await api.post('subscriptions/activation'+(action==='start'?'':'/'+action),body,{headers:await caretakerHeaders(),timeout:55000});return {data};
  }catch(error:any){return {error:typeof error.response?.data?.detail==='string'?error.response.data.detail:'Card activation could not be completed. Please retry.'};}
 }

@@ -12,7 +12,7 @@ export async function startEstateCheckout(tier:string,billingMonths:number){
  try{
   const origin=await appOrigin();
   if(!origin)return {error:'Please reload this page before starting checkout.'};
-  const response=await api.post('subscriptions/checkout',{tier,billing_months:billingMonths,success_url:new URL('/dashboard/subscription?checkout=success',origin).href,cancel_url:new URL('/dashboard/subscription?checkout=cancelled',origin).href},{headers:await caretakerHeaders(),timeout:20000});
+  const response=await api.post('subscriptions/checkout',{tier,billing_months:billingMonths,success_url:new URL('/dashboard/settings?checkout=success#subscription',origin).href,cancel_url:new URL('/dashboard/settings?checkout=cancelled#subscription',origin).href},{headers:await caretakerHeaders(),timeout:20000});
   if(response.data.is_simulated)return {error:'Online payments are not configured. Contact the platform owner to arrange renewal.'};
   return {data:response.data as {session_id:string;checkout_url:string;is_sandbox:boolean;returns_to_app:boolean}};
  }catch(error){

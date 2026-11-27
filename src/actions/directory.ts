@@ -8,19 +8,28 @@ function failure(error: unknown, fallback: string) {
     return {error: typeof detail === 'string' ? detail : fallback};
 }
 
-export async function directoryRequest(action: 'list'|'create'|'import'|'revoke'|'restore'|'update'|'delete', id?: string, data?: unknown) {
-    if (!['list','create','import','revoke','restore','update','delete'].includes(action)) return {error:'Unknown directory action.'};
-    if (['revoke','restore','update','delete'].includes(action) && !z.string().uuid().safeParse(id).success) return {error:'Invalid account.'};
+export async function directoryRequest(action: 'archive-list'|'archive-reinstate'|'archive-hold'|'list'|'create'|'import'|'revoke'|'restore'|'update'|'archive', id?: string, data?: unknown) {
+    if (!['archive-list','archive-reinstate','archive-hold','list','create','import','revoke','restore','update','archive'].includes(action)) return {error:'Unknown directory action.'};
+    if (['revoke','restore','update','archive','archive-hold','archive-reinstate'].includes(action) && !z.string().uuid().safeParse(id).success) return {error:'Invalid account.'};
     try {
         const headers = await caretakerHeaders();
+        if (action === 'archive-reinstate') return (await api.patch(`users/${id}/archive/reinstate`, {}, {headers, timeout:15000})).data;
+        if (action === 'archive-hold') return (await api.patch(`users/${id}/archive/hold`, {}, {headers, timeout:15000})).data;
+        if (action === 'archive-list') return (await api.get('users/archive', {headers, timeout:15000})).data;
         if (action === 'list') return (await api.get('landlords/', {headers, timeout:15000})).data;
         if (action === 'create') return (await api.post('landlords/', data, {headers, timeout:15000})).data;
         if (action === 'import') return (await api.post('landlords/import', data, {headers, timeout:15000})).data;
-        if (action === 'delete') return (await api.delete(`users/${id}`, {headers, timeout:15000})).data;
-        if (action === 'revoke' || action === 'restore') {
-            return (await api.patch(`users/${id}/status`, {is_revoked: action === 'revoke'}, {headers, timeout:15000})).data;
+        if (action === 'archive' || action === 'revoke') {
+            const reason = z.string().trim().min(1).max(500).safeParse(data);
+            if (!reason.success) return {error:'Enter a suspension reason of 1 to 500 characters.'};
+            const body = {reason: reason.data};
+            if (action === 'archive') return (await api.patch(`users/${id}/archive`, body, {headers, timeout:15000})).data;
+            return (await api.patch(`users/${id}/status`, {is_revoked: true, ...body}, {headers, timeout:15000})).data;
         }
-        const parsed = z.object({full_name:z.string().min(1).optional(),email:z.string().email().optional(),house_number:z.string().nullable().optional(),street_name:z.string().nullable().optional()}).parse(data);
+        if (action === 'restore') {
+            return (await api.patch(`users/${id}/status`, {is_revoked: false}, {headers, timeout:15000})).data;
+        }
+        const parsed = z.object({full_name:z.string().min(1).optional(),email:z.string().email().optional(),house_number:z.string().nullable().optional(),street_name:z.string().nullable().optional(),phone:z.string().max(40).nullable().optional(),reset_password:z.boolean().optional()}).parse(data);
         return (await api.patch(`users/${id}`, parsed, {headers, timeout:15000})).data;
     } catch (error) {
         return failure(error, 'Unable to complete the resident directory request. Please retry.');

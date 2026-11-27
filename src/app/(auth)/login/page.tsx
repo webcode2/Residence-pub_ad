@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Mail, Lock, Building2, Chrome, ArrowRight, Play, Loader2, AlertCircle } from "lucide-react";
-import { loginAction } from "@/actions/auth";
+import { loginAction, requestReinstatementAction } from "@/actions/auth";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import { useEstate } from "@/contexts/EstateContext";
@@ -58,6 +58,9 @@ export default function LoginPage() {
             } else if (result.error) {
                 setErrorMessage(result.error);
                 toast.error(result.error);
+            } else if (result.data?.user?.must_change_password) {
+                localStorage.setItem('app_id', values.appId);
+                router.replace('/change-password');
             } else {
                 localStorage.setItem('app_id', values.appId);
 
@@ -74,6 +77,19 @@ export default function LoginPage() {
             console.error("[LoginPage] Outer catch error:", error);
             setErrorMessage(msg);
             toast.error(msg);
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    async function requestReinstatement() {
+        setIsLoading(true);
+        setErrorMessage(null);
+        try {
+            const { appId, email } = form.getValues();
+            const result = await requestReinstatementAction({ appId, email });
+            if (result.error) setErrorMessage(result.error);
+            else if (result.message) toast.success(result.message);
         } finally {
             setIsLoading(false);
         }
@@ -161,6 +177,9 @@ export default function LoginPage() {
                         )}
                     </Button>
                 </form>
+                <Button type="button" variant="ghost" disabled={isLoading} onClick={requestReinstatement}>
+                    Request account reinstatement
+                </Button>
             </Form>
 
             <div className="text-center text-sm font-medium text-slate-500">

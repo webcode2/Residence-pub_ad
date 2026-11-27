@@ -5,7 +5,7 @@ import { caretakerHeaders } from '@/lib/caretaker';
 
 export type ReportSeverity = 'low' | 'medium' | 'high';
 export type ReportStatus = 'open' | 'investigating' | 'resolved';
-export interface IncidentReport { id: string; title: string; description: string; location: string; severity: ReportSeverity; status: ReportStatus; is_anonymous: boolean; reporter_role: string; reported_by_name: string; is_own: boolean; resolution_note: string | null; created_at: string; updated_at: string; }
+export interface IncidentReport { id: string; title: string; description: string; location: string; severity: ReportSeverity; status: ReportStatus; is_anonymous: boolean; reporter_role: string; reported_by_name: string; reporter_id?: string | null; reporter_identity?: string | null; is_own: boolean; resolution_note: string | null; created_at: string; updated_at: string; }
 export interface ReportPage { reports: IncidentReport[]; has_more: boolean; counts: Record<ReportStatus, number>; }
 export interface Announcement { id: string; title: string; body: string; category: string; audience: string; author_name: string | null; recipient_count: number; push_sent: number; push_failed: number; created_at: string; }
 interface Result<T> { data?: T; error?: string; }
@@ -16,7 +16,7 @@ const reportInput = z.object({ title: z.string().trim().min(3).max(120), descrip
     location: z.string().trim().min(2).max(200), severity, is_anonymous: z.boolean() });
 const triageInput = z.object({ status: status.optional(), resolution_note: z.string().max(1000).optional() });
 const announcementInput = z.object({ title: z.string().trim().min(3).max(120), body: z.string().trim().min(3).max(2000),
-    category: z.enum(['general', 'alert', 'maintenance', 'security']), audience: z.enum(['all', 'resident', 'landlord', 'security']) });
+    category: z.enum(['alert', 'maintenance', 'security']), audience: z.enum(['all', 'resident', 'landlord', 'security']) });
 
 function failure(error: unknown): string {
     const response = (error as { response?: { status?: number; data?: { detail?: unknown } } }).response;

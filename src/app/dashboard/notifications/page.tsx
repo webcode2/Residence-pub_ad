@@ -1,20 +1,20 @@
 "use client";
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Megaphone, AlertTriangle, Wrench, Shield, Send, RefreshCw, Bell } from 'lucide-react';
+import { AlertTriangle, Wrench, Shield, Send, RefreshCw, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { listAnnouncements, sendAnnouncement } from '@/actions/community';
 
-type Category = 'general' | 'alert' | 'maintenance' | 'security';
+type Category = 'alert' | 'maintenance' | 'security';
 type Audience = 'all' | 'resident' | 'landlord' | 'security';
-const categories: { value: Category; label: string; icon: typeof Megaphone }[] = [
-    { value: 'general', label: 'General', icon: Megaphone }, { value: 'alert', label: 'Alert', icon: AlertTriangle },
+const categories: { value: Category; label: string; icon: typeof AlertTriangle }[] = [
+    { value: 'alert', label: 'Alert', icon: AlertTriangle },
     { value: 'maintenance', label: 'Maintenance', icon: Wrench }, { value: 'security', label: 'Security', icon: Shield },
 ];
 const audiences: { value: Audience; label: string }[] = [
-    { value: 'all', label: 'Everyone in the estate' }, { value: 'resident', label: 'Residents' },
+    { value: 'all', label: 'Everyone in the estate' }, { value: 'resident', label: 'Residents in host households' },
     { value: 'landlord', label: 'Hosts / Property Owners' }, { value: 'security', label: 'Security staff' },
 ];
 const field = 'w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm';
@@ -22,7 +22,7 @@ const field = 'w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm
 export default function Announcements() {
     const cache = useQueryClient();
     const [title, setTitle] = useState(''), [body, setBody] = useState('');
-    const [category, setCategory] = useState<Category>('general'), [audience, setAudience] = useState<Audience>('all');
+    const [category, setCategory] = useState<Category>('maintenance'), [audience, setAudience] = useState<Audience>('all');
     const [sending, setSending] = useState(false), [offset, setOffset] = useState(0);
     const history = useQuery({ queryKey: ['announcements', offset], retry: false, refetchOnWindowFocus: false,
         queryFn: async () => { const r = await listAnnouncements(offset); if (!r.data) throw new Error(r.error); return r.data; } });
@@ -36,13 +36,13 @@ export default function Announcements() {
             const r = await sendAnnouncement({ title, body, category, audience });
             if (!r.data) { toast.error(r.error); return; }
             toast.success(`Announcement delivered to ${r.data.recipient_count} inbox${r.data.recipient_count === 1 ? '' : 'es'}.`);
-            setTitle(''); setBody(''); setCategory('general'); setAudience('all'); setOffset(0);
+            setTitle(''); setBody(''); setCategory('maintenance'); setAudience('all'); setOffset(0);
             await cache.invalidateQueries({ queryKey: ['announcements'] });
         } finally { setSending(false); }
     }
 
     return <div className="mx-auto w-full max-w-7xl space-y-6">
-        <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Estate community</p><h1 className="mt-2 text-3xl font-semibold">Announcements</h1><p className="mt-2 text-sm text-muted-foreground">Messages land in each recipient’s in-app inbox and are pushed to their registered phones.</p></div>
+        <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Estate community</p><h1 className="mt-2 text-3xl font-semibold">Announcements</h1><p className="mt-2 text-sm text-muted-foreground">Send estate updates to the mobile app. Alerts and security messages use high-priority delivery.</p></div>
         <div className="grid gap-6 xl:grid-cols-[1fr_1.1fr]">
             <form onSubmit={send} className="space-y-5 rounded-xl border bg-card p-6">
                 <fieldset><legend className="text-sm font-medium">Type</legend><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{categories.map(c => <label key={c.value}

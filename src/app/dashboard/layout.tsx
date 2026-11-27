@@ -9,5 +9,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
         !session.user.roles?.includes('caretaker')) {
         redirect('/login?reason=caretaker');
     }
+    if (session.user.must_change_password) redirect('/change-password');
     return <DashboardShell><CardActivation>{children}</CardActivation></DashboardShell>;
 }

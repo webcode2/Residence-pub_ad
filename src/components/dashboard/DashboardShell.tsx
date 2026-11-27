@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, FileText, CreditCard, Settings, Menu, LogOut, Bell, MessagesSquare, ChevronRight, ArrowUpRight, ShieldCheck, Building2, LifeBuoy } from 'lucide-react';
+import { Archive, LayoutDashboard, Users, FileText, Settings, Menu, LogOut, Bell, MessagesSquare, ChevronRight, ArrowUpRight, ShieldCheck, Building2, LifeBuoy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -22,7 +22,6 @@ const groups = [
         { path: '/dashboard/sos', label: 'SOS alert history', icon: ShieldCheck },
     ] },
     { label: 'ESTATE MANAGEMENT', items: [
-        { path: '/dashboard/subscription', label: 'Estate subscription', icon: CreditCard },
         { path: '/dashboard/reports', label: 'Incident reports', icon: ShieldCheck },
         { path: '/dashboard/notifications', label: 'Announcements', icon: Bell },
         { path: '/dashboard/settings', label: 'Estate settings', icon: Settings },
@@ -55,19 +54,24 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             })}</div></div>)}
         </nav>
         <div className="mx-4 my-6 rounded-lg border border-white/10 p-4"><div className="flex gap-2 items-center text-[#d7e1cb]"><ShieldCheck size={16} /><p className="text-xs font-medium">Your estate. Your space.</p></div><p className="mt-2 text-[10px] leading-relaxed text-[#91a192]">Manage your community with a clear view of the details.</p><Link href="/#faq" className="mt-3 inline-flex items-center gap-2 text-[10px] text-[#c5d7b2] hover:text-white">Platform guide<ArrowUpRight size={12} /></Link></div>
+        <Link href="/dashboard/archive" onClick={() => setMobileOpen(false)}
+            aria-current={pathname === '/dashboard/archive' ? 'page' : undefined}
+            className="mx-4 mb-2 flex items-center gap-3 rounded-md border-t border-white/10 px-3 py-3 text-xs text-[#b4c0b5] hover:bg-white/5 hover:text-white">
+            <Archive size={17} />Archive
+        </Link>
         <button onClick={signOut} className="flex items-center gap-3 border-t border-white/10 px-7 py-5 text-xs text-[#a2b0a4] hover:text-white"><LogOut size={16} />Sign out</button>
     </div>;
-    return <div className="min-h-screen bg-background">
+    return <div className="bg-background">
         <a href="#dashboard-content" className="skip-link">Skip to dashboard content</a>
         <aside className="hidden lg:block fixed inset-y-0 left-0 w-[244px] overflow-hidden bg-[#24372e] z-40">{sidebar}</aside>
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}><SheetContent side="left" className="w-[280px] p-0 border-0 bg-[#24372e] text-white"><SheetTitle className="sr-only">Estate navigation</SheetTitle><SheetDescription className="sr-only">Navigate your estate management workspace.</SheetDescription>{sidebar}</SheetContent></Sheet>
-        <div className="lg:ml-[244px] min-w-0">
+        <div className="flex min-h-dvh min-w-0 flex-col lg:ml-[244px]">
             <header className="h-[76px] border-b border-border bg-background/95 backdrop-blur-md flex items-center justify-between gap-4 px-5 sm:px-8 sticky top-0 z-30">
-                <div className="flex items-center gap-3 text-xs text-muted-foreground min-w-0"><Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open estate navigation" onClick={() => setMobileOpen(true)}><Menu size={20} /></Button><span className="hidden sm:inline">Workspace</span><ChevronRight className="hidden sm:block h-3 w-3" /><span className="text-foreground font-medium truncate">{current?.label || 'Estate settings'}</span></div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground min-w-0"><Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open estate navigation" onClick={() => setMobileOpen(true)}><Menu size={20} /></Button><span className="hidden sm:inline">Workspace</span><ChevronRight className="hidden sm:block h-3 w-3" /><span className="text-foreground font-medium truncate">{current?.label || (pathname === '/dashboard/archive' ? 'Archive' : 'Estate settings')}</span></div>
                 <div className="flex items-center gap-4"><span className="hidden md:inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[10px] text-muted-foreground"><ShieldCheck size={12} />Estate caretaker</span><Link href="/dashboard/notifications" aria-label="Manage announcements" className="p-2 text-muted-foreground rounded-md hover:bg-muted"><Bell size={18} strokeWidth={1.6} /></Link><div className="h-7 border-l border-border" /><Link href="/dashboard/profile" className="flex items-center gap-3" aria-label={`Profile for ${name}`}><div className="hidden md:block text-right"><p className="text-xs font-medium">{name}</p><p className="text-[10px] text-muted-foreground mt-1">{user?.app_id || 'Estate account'}</p></div><span className="grid h-9 w-9 place-items-center rounded-full border border-[#d4ddc9] bg-[#e8eedf] text-[11px] font-semibold text-[#526c42]">{initials}</span></Link></div>
             </header>
             <main id="dashboard-content" className="w-full min-w-0 p-5 sm:p-8 lg:p-9 max-w-[1540px] mx-auto">{children}</main>
-            <footer className="w-full max-w-[1540px] mx-auto px-5 sm:px-8 lg:px-9 pb-6 flex flex-wrap justify-between gap-3 text-[10px] text-muted-foreground"><span>Residence · Estate management, thoughtfully connected.</span><div className="flex gap-5"><Link href="/privacy" className="hover:text-foreground">Privacy</Link><Link href="/#faq" className="inline-flex gap-1.5 items-center hover:text-foreground"><LifeBuoy size={12} />Help & FAQs</Link></div></footer>
+            <footer className="w-full max-w-[1540px] mx-auto mt-auto px-5 sm:px-8 lg:px-9 pb-6 flex flex-wrap justify-between gap-3 text-[10px] text-muted-foreground"><span>Residence · Estate management, thoughtfully connected.</span><div className="flex gap-5"><Link href="/privacy" className="hover:text-foreground">Privacy</Link><Link href="/#faq" className="inline-flex gap-1.5 items-center hover:text-foreground"><LifeBuoy size={12} />Help & FAQs</Link></div></footer>
         </div>
     </div>;
 }

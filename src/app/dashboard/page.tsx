@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Users, DoorOpen, MessagesSquare, ShieldAlert, ArrowUpRight, RefreshCw, Plus, Bell, ShieldCheck, Activity, Check, CalendarDays } from 'lucide-react';
+import { Archive, KeyRound, UserRoundCheck, Users, DoorOpen, MessagesSquare, ShieldAlert, ArrowUpRight, RefreshCw, Plus, Bell, ShieldCheck, Activity, Check, CalendarDays } from 'lucide-react';
 import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/contexts/UserContext';
@@ -23,10 +23,37 @@ export default function Overview() {
         { label: 'Open conversations', value: data?.open_conversations, icon: MessagesSquare, note: 'Resident–guard threads', href: '/dashboard/conversations' },
         { label: 'Active emergencies', value: data?.emergencies, icon: ShieldAlert, note: 'Flagged open conversations', href: '/dashboard/conversations', emergency: true },
     ];
+    const accountActions = [
+        { label: 'Pending password emails', value: data?.pending_password_resets, icon: KeyRound,
+            detail: 'View queued resets and retry status', href: '/dashboard/residents?view=password-resets' },
+        { label: 'Returning users', value: data?.returning_users, icon: UserRoundCheck,
+            detail: 'Review accounts flagged in the directory', href: '/dashboard/residents?view=returning-users' },
+        { label: 'Archived accounts', value: data?.archived_accounts, icon: Archive,
+            detail: data?.retained_accounts === undefined
+                ? 'Review retention and reinstatement'
+                : `${data.retained_accounts.toLocaleString()} under a retention hold`, href: '/dashboard/archive' },
+    ];
     return <div className="space-y-7">
         <div className="flex flex-wrap justify-between items-end gap-5"><div><p className="text-[10px] uppercase tracking-[.17em] text-muted-foreground mb-2">YOUR COMMUNITY, AT A GLANCE</p><h1 className="text-3xl sm:text-[34px] font-medium tracking-[-.045em]">A clearer view of your estate.</h1><p className="text-xs text-muted-foreground mt-3">Welcome back{user?.full_name ? `, ${user.full_name.split(' ')[0]}` : ''}. Here’s where things stand.</p></div><div className="flex items-center gap-2"><Button variant="outline" onClick={() => overview.refetch()} disabled={overview.isFetching} className="bg-card text-xs h-10"><RefreshCw className={overview.isFetching ? 'animate-spin' : ''} />Refresh</Button><Button asChild className="text-xs h-10"><Link href="/dashboard/residents"><Plus />Manage residents</Link></Button></div></div>
         {overview.error && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-lg border border-amber-200 bg-amber-50"><p className="text-xs text-amber-900">{overview.error.message} Your estate tools are still available below.</p><Button variant="outline" size="sm" onClick={() => overview.refetch()}>Try again</Button></div>}
         <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">{stats.map(stat => <Link href={stat.href} key={stat.label} className="group rounded-xl bg-card border border-border p-5 hover:border-[#b6c8a7] transition-colors"><div className="flex justify-between items-start gap-2"><span className="text-[11px] text-muted-foreground">{stat.label}</span><stat.icon size={17} strokeWidth={1.6} className={stat.emergency && (stat.value ?? 0) > 0 ? 'text-destructive' : 'text-[#718368]'} /></div>{overview.isLoading ? <div className="h-10 w-20 bg-muted animate-pulse mt-5 rounded" /> : <p className="text-[34px] tracking-[-.055em] font-medium mt-4 tabular-nums">{stat.value?.toLocaleString() ?? '—'}</p>}<div className="flex items-center justify-between mt-3"><p className="text-[10px] text-muted-foreground">{stat.note}</p><ArrowUpRight size={13} className="text-muted-foreground group-hover:text-primary" /></div></Link>)}</div>
+        <section aria-labelledby="account-management" className="rounded-xl border border-border bg-card p-5 sm:p-6">
+            <h2 id="account-management" className="text-sm font-medium">Account management</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {accountActions.map(action => <Link key={action.label} href={action.href}
+                    className="group min-w-0 rounded-lg border border-border px-4 py-3 transition-colors hover:border-primary/40 hover:bg-muted/30">
+                    <div className="flex min-w-0 items-center gap-2 text-xs font-medium">
+                        <action.icon size={16} className="shrink-0 text-primary" />
+                        <span>{action.label}</span>
+                        <ArrowUpRight size={13} className="ml-auto shrink-0 text-muted-foreground group-hover:text-primary" />
+                    </div>
+                    <p className="mt-2 text-2xl font-medium tabular-nums" aria-busy={overview.isLoading}>
+                        {action.value?.toLocaleString() ?? '—'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{action.detail}</p>
+                </Link>)}
+            </div>
+        </section>
         <div className="grid xl:grid-cols-[1.65fr_1fr] gap-5">
             <section className="bg-card border border-border rounded-xl p-5 sm:p-6 min-w-0"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-medium text-sm">The rhythm at your gates</h2><p className="text-[11px] text-muted-foreground mt-1.5">Gate outcomes and visitor passcodes generated over the last seven UTC days</p></div><span className="flex items-center gap-1.5 text-[10px] rounded-md border border-border px-2.5 py-1.5 text-muted-foreground"><CalendarDays size={12} />Last 7 days</span></div><div className="flex items-center gap-5 mt-6 text-[10px] text-muted-foreground"><span className="flex gap-2 items-center"><i className="h-2 w-2 rounded-sm bg-[#607e52]" />Authorized</span><span className="flex gap-2 items-center"><i className="h-2 w-2 rounded-sm bg-[#d6b59c]" />Denied</span><span className="flex gap-2 items-center"><i className="h-2 w-2 rounded-sm bg-[#9fb4c7]" />Passcodes generated</span></div><div className="h-[240px] mt-5" role="img" aria-label={data ? `Seven-day access activity: ${data.gate_activity.reduce((sum, day) => sum + day.authorized, 0)} authorized, ${data.gate_activity.reduce((sum, day) => sum + day.denied, 0)} denied, ${data.gate_activity.reduce((sum, day) => sum + day.generated, 0)} visitor passcodes generated.` : 'Access activity unavailable'}>{overview.isLoading ? <div className="h-full rounded-md bg-muted animate-pulse" /> : data ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.gate_activity} barGap={3} margin={{ top: 15, right: 0, left: -25, bottom: 0 }}><CartesianGrid vertical={false} stroke="#edf0e8" /><XAxis dataKey="date" tickFormatter={value => new Date(`${value}T12:00:00Z`).toLocaleDateString('en', { weekday: 'short' })} tick={{ fontSize: 10, fill: '#92998c' }} axisLine={false} tickLine={false} dy={10} /><YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#92998c' }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ border: '1px solid #e2e6da', borderRadius: 8, fontSize: 11 }} cursor={{ fill: '#f4f6f0' }} /><Bar dataKey="authorized" name="Authorized" fill="#607e52" radius={[3, 3, 0, 0]} maxBarSize={22} /><Bar dataKey="denied" name="Denied" fill="#d6b59c" radius={[3, 3, 0, 0]} maxBarSize={22} /><Bar dataKey="generated" name="Passcodes generated" fill="#9fb4c7" radius={[3, 3, 0, 0]} maxBarSize={22} /></BarChart></ResponsiveContainer> : <div className="h-full grid place-items-center text-xs text-muted-foreground">Access activity will appear when the estate data is available.</div>}</div></section>
             <section className="bg-[#eaf0e2] border border-[#d8e2cd] rounded-xl p-6 flex flex-col"><span className="text-[9px] tracking-[.15em] text-[#748466]">A WELL-RUN EVERYDAY</span><h2 className="text-2xl font-medium tracking-tight mt-3">The details,<br /><span className="serif-word">within reach.</span></h2><p className="text-[11px] leading-7 text-[#75816a] mt-3">A few direct routes to the things that keep your estate moving.</p><div className="mt-5 space-y-2">{[{ icon: MessagesSquare, label: 'Review conversations', sub: 'Follow the full resident–guard history', href: '/dashboard/conversations' }, { icon: Bell, label: 'Share an announcement', sub: 'Keep your community in the loop', href: '/dashboard/notifications' }, { icon: ShieldCheck, label: 'Review incident reports', sub: 'Give issues the attention they need', href: '/dashboard/reports' }].map(action => <Link key={action.href} href={action.href} className="flex items-center gap-3 bg-white/60 rounded-lg border border-white/80 px-3 py-3 hover:bg-white transition-colors"><action.icon size={17} className="text-[#6d845d] shrink-0" /><div><p className="text-[11px] font-medium">{action.label}</p><p className="text-[9px] text-[#7e8974] mt-1">{action.sub}</p></div><ArrowUpRight size={14} className="ml-auto text-[#849475] shrink-0" /></Link>)}</div></section>

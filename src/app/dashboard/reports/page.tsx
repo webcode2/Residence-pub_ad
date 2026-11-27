@@ -42,10 +42,9 @@ export default function IncidentReports() {
             <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Estate safety</p><h1 className="mt-2 text-3xl font-semibold">Incident reports</h1><p className="mt-2 text-sm text-muted-foreground">Reports filed by residents, hosts / property owners and guards from the app. Reporters are notified when you change a report’s status.</p></div>
             <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={query.isFetching} onClick={() => query.refetch()}><RefreshCw size={16} className={query.isFetching ? 'mr-2 animate-spin' : 'mr-2'} />Refresh</Button><Button variant="outline" asChild><Link href="/dashboard/notifications"><Megaphone size={16} className="mr-2" />Send announcement</Link></Button><Button onClick={() => { setDraft(blank); setError(''); setCreating(true); }}><Plus size={16} className="mr-2" />Log incident</Button></div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">{statuses.map(s => <button key={s} onClick={() => { setStatus(status === s ? '' : s); setOffset(0); }} aria-pressed={status === s}
-            className={`rounded-xl border bg-card p-5 text-left transition-colors hover:border-[#b6c8a7] ${status === s ? 'border-[#7a9563] ring-1 ring-[#7a9563]' : 'border-border'}`}><p className="text-xs capitalize text-muted-foreground">{s}</p><p className="mt-3 text-3xl font-medium tabular-nums">{counts ? counts[s] : '—'}</p></button>)}</div>
+        <div role="group" aria-label="Incident report status" className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border bg-card">{statuses.map(s => <button key={s} onClick={() => { setStatus(status === s ? '' : s); setOffset(0); }} aria-pressed={status === s}
+            className={`p-3 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:p-5 ${status === s ? 'bg-muted' : ''}`}><p className="text-xs capitalize text-muted-foreground">{s}</p><p className="mt-3 text-3xl font-medium tabular-nums">{counts ? counts[s] : '—'}</p></button>)}</div>
         <div className="flex flex-wrap gap-3">
-            <select aria-label="Filter by status" value={status} onChange={e => { setStatus(e.target.value); setOffset(0); }} className="rounded-md border border-input bg-card px-3 py-2.5 text-sm"><option value="">All statuses</option>{statuses.map(s => <option key={s} value={s}>{s}</option>)}</select>
             <select aria-label="Filter by severity" value={severity} onChange={e => { setSeverity(e.target.value); setOffset(0); }} className="rounded-md border border-input bg-card px-3 py-2.5 text-sm"><option value="">All severities</option>{['low', 'medium', 'high'].map(s => <option key={s} value={s}>{s}</option>)}</select>
         </div>
         {query.error && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{query.error.message}</p>}
@@ -63,6 +62,11 @@ export default function IncidentReports() {
 
         <Dialog open={selected !== null} onOpenChange={o => { if (!saving && !o) setSelected(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{selected?.title}</DialogTitle><DialogDescription>{selected && `${selected.reported_by_name} · ${selected.location} · ${new Date(selected.created_at).toLocaleString()}`}</DialogDescription></DialogHeader>
             <p className="whitespace-pre-wrap text-sm">{selected?.description}</p>
+            {selected && <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                <p className="font-medium">Reporter identity</p>
+                <p>{selected.reporter_identity || selected.reporter_id || 'Account unavailable'}</p>
+                {selected.is_anonymous && <p className="mt-1 text-xs text-muted-foreground">Filed anonymously. Reporter identity is visible only to authorized estate staff.</p>}
+            </div>}
             <label className="text-sm font-medium">Status<select value={next} onChange={e => setNext(e.target.value as ReportStatus)} className={`${field} mt-2 capitalize`}>{statuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
             <label className="text-sm font-medium">Note for the record<Textarea className="mt-2" maxLength={1000} value={note} onChange={e => setNote(e.target.value)} placeholder="What was done, or what happens next" /></label>
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
