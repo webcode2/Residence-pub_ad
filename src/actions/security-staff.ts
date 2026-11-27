@@ -11,8 +11,18 @@ export type SecurityOfficer = {
     phone: string | null;
     status: 'active' | 'awaiting_first_sign_in' | 'suspended';
     created_at: string;
+    /** Latest sign-in email. The temporary password works only once it is 'sent'. */
+    email_status: 'queued' | 'retrying' | 'sent' | 'cancelled' | null;
+    staff_number: string | null;
+    alternate_phone: string | null;
+    home_address: string | null;
+    emergency_contact_name: string | null;
+    emergency_contact_phone: string | null;
+    notes: string | null;
 };
-export type OfficerCredentials = SecurityOfficer & { temporary_password: string; email_status: string; message: string };
+export type OfficerCredentials = SecurityOfficer & { temporary_password: string; message: string };
+/** After an edit; a temporary password is present only when a changed email got a new welcome. */
+export type OfficerUpdated = SecurityOfficer & { temporary_password: string | null; message: string };
 
 type Result<T> = { data: T; error?: undefined } | { data?: undefined; error: string };
 
@@ -47,6 +57,31 @@ export async function registerSecurityOfficer(input: unknown): Promise<Result<Of
     }
 }
 
+const officerDetails = z.object({
+    full_name: z.string().trim().min(1, 'Enter the officer’s full name').max(255),
+    email: z.string().trim().email('Enter a valid email address'),
+    phone: z.string().trim().max(40),
+    staff_number: z.string().trim().max(50),
+    alternate_phone: z.string().trim().max(40),
+    home_address: z.string().trim().max(500),
+    emergency_contact_name: z.string().trim().max(255),
+    emergency_contact_phone: z.string().trim().max(40),
+    notes: z.string().trim().max(1000),
+});
+export type OfficerDetails = z.infer<typeof officerDetails>;
+
+export async function updateSecurityOfficer(id: string, input: unknown): Promise<Result<OfficerUpdated>> {
+    if (!z.string().uuid().safeParse(id).success) return { error: 'Invalid officer.' };
+    const parsed = officerDetails.safeParse(input);
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message || 'Check the officer details.' };
+    try {
+        // Blank optional fields are sent as empty text, which clears them.
+        return { data: (await api.patch(`security-staff/${id}`, parsed.data, { headers: await caretakerHeaders(), timeout: 20000 })).data };
+    } catch (error) {
+        return failure(error, 'Unable to save these details. Please retry.');
+    }
+}
+
 export async function resetOfficerPassword(id: string): Promise<Result<OfficerCredentials>> {
     if (!z.string().uuid().safeParse(id).success) return { error: 'Invalid officer.' };
     try {
@@ -56,10 +91,12 @@ export async function resetOfficerPassword(id: string): Promise<Result<OfficerCr
     }
 }
 
-export async function setOfficerSuspended(id: string, suspended: boolean): Promise<Result<true>> {
+export async function setOfficerSuspended(id: string, suspended: boolean, reason?: string): Promise<Result<true>> {
     if (!z.string().uuid().safeParse(id).success) return { error: 'Invalid officer.' };
+    const parsed = z.string().trim().min(1).max(500).safeParse(reason);
+    if (suspended && !parsed.success) return { error: 'Enter a suspension reason of 1 to 500 characters.' };
     try {
-        await api.patch(`users/${id}/status`, { is_revoked: suspended }, { headers: await caretakerHeaders(), timeout: 15000 });
+        await api.patch(`users/${id}/status`, { is_revoked: suspended, reason: suspended ? parsed.data : undefined }, { headers: await caretakerHeaders(), timeout: 15000 });
         return { data: true };
     } catch (error) {
         return failure(error, suspended ? 'Unable to suspend this officer.' : 'Unable to reinstate this officer.');
